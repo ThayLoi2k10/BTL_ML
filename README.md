@@ -1,5 +1,7 @@
 # Bài Tập Lớn Machine Learning
 
+## 0. Link dataset: https://www.kaggle.com/datasets/goyaladi/twitter-bot-detection-dataset?resource=download&select=bot_detection_data.csv
+
 ## 1. Thành viên nhóm
 * **Person 1:** Phan Ngọc Xuân Lợi - 2411969
 * **Person 2:** [Họ tên] - [MSSV]
@@ -14,8 +16,7 @@ Mở PowerShell tại thư mục muốn lưu dự án và chạy lần lượt:
 
 ```powershell
 # 1. Kéo code về máy (chỉ chạy lần đầu tiên)
-git clone [https://github.com/ThayLoi2k10/BTL_ML.git](https://github.com/ThayLoi2k10/BTL_ML.git)
-cd BTL_ML
+git clone https://github.com/ThayLoi2k10/BTL_ML.git
 
 # 2. Tạo và kích hoạt môi trường ảo
 py -m venv venv
