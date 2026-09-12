@@ -1,0 +1,30 @@
+# 1. Môi trường ảo (Bắt buộc chặn để không đẩy hàng nghìn file thư viện lên Git)
+venv/
+.venv/
+env/
+
+# 2. Dữ liệu nặng (Chỉ giữ lại file giữ chỗ .gitkeep)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# 3. File mô hình nhị phân nặng (Chỉ đẩy file cấu hình .json, file link .txt và .gitkeep)
+models/*.pkl
+models/*.joblib
+!models/.gitkeep
+!models/*.json
+!models/*.txt
+
+# 4. File tạm của Python và Jupyter Notebook
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# 5. Cấu hình IDE & File hệ điều hành
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
