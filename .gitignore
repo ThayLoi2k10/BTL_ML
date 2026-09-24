@@ -6,6 +6,7 @@ env/
 # 2. Dữ liệu nặng (Chỉ giữ lại file giữ chỗ .gitkeep)
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/bank.csv
 data/processed/*
 !data/processed/.gitkeep
 
