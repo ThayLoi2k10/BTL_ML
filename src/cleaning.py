@@ -85,6 +85,11 @@ class MissingHandler(BaseEstimator, TransformerMixin):
         self.fill_values_ = {}
 
         for col in NUMERICAL_COLUMNS:
+            # Pipeline tích hợp có thể loại cột leakage (ví dụ duration)
+            # trước bước cleaning. Các cột còn lại vẫn dùng nguyên logic gốc.
+            if col not in X.columns:
+                continue
+
             series = X[col]
 
             # pdays = -1 là sentinel, không dùng để tính statistic
@@ -117,6 +122,8 @@ class MissingHandler(BaseEstimator, TransformerMixin):
 
         # Numerical: NaN -> statistic đã học từ train
         for col in NUMERICAL_COLUMNS:
+            if col not in X.columns:
+                continue
             X[col] = X[col].fillna(self.fill_values_[col])
 
         return X
@@ -137,6 +144,9 @@ class OutlierClipper(BaseEstimator, TransformerMixin):
             "campaign",
             "previous",
             "pdays",
+        ]
+        self.clip_columns_ = [
+            col for col in self.clip_columns_ if col in X.columns
         ]
 
         # Các biến không được phép âm

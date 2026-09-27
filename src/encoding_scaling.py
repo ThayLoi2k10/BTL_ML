@@ -164,7 +164,7 @@ def get_feature_configuration_summary() -> pd.DataFrame:
 def _load_default_dataset() -> pd.DataFrame:
     """Load the project dataset when this file is executed directly."""
     project_root = Path(__file__).resolve().parents[1]
-    dataset_path = project_root / "data" / "raw" / "dataset.csv"
+    dataset_path = project_root / "data" / "raw" / "bank.csv"
     return pd.read_csv(dataset_path)
 
 
