@@ -10,8 +10,7 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
-# 3. File mô hình nhị phân nặng (Chỉ đẩy file cấu hình .json, file link .txt và .gitkeep)
-models/*.pkl
+# 3. File mô hình
 models/*.joblib
 !models/.gitkeep
 !models/*.json

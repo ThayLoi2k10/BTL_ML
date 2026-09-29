@@ -1,0 +1,4 @@
+Mô hình,CV F1-Macro,Ghi chú / Tham số
+Dummy Baseline (Most Frequent),0.3448,strategy='most_frequent'
+Logistic Regression (Default),0.699,LogisticRegression()
+Logistic Regression (Tuned),0.696,"{""C"": 10.0, ""penalty"": ""l1""}"
