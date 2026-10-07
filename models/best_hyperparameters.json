@@ -1,0 +1,58 @@
+{
+  "experiment": {
+    "primary_scoring": "f1_macro",
+    "data_scope": "X_train and y_train only",
+    "cv": {
+      "type": "StratifiedKFold",
+      "n_splits": 5,
+      "shuffle": true,
+      "random_state": 42
+    },
+    "note": "No held-out test result is included; final champion selection is deferred to Week 4."
+  },
+  "linear": {
+    "owner": "Loi",
+    "algorithm": "LogisticRegression",
+    "best_params": {
+      "C": 10.0,
+      "penalty": "l1"
+    },
+    "best_cv_score": 0.6960373975431392,
+    "cv_std": 0.003994977288797795,
+    "teammate_reported_best_cv_score": 0.696,
+    "elapsed_seconds": null,
+    "elapsed_note": "Original Grid Search elapsed time was not persisted by the teammate implementation.",
+    "artifact": "models/best_linear_model.pkl"
+  },
+  "tree": {
+    "owner": "Tri",
+    "algorithm": "RandomForestClassifier",
+    "best_params": {
+      "n_estimators": 300,
+      "max_depth": 20,
+      "min_samples_split": 10
+    },
+    "best_cv_score": 0.7232786044431585,
+    "cv_std": 0.009550436506655281,
+    "teammate_reported_best_cv_score": 0.7233,
+    "elapsed_seconds": null,
+    "elapsed_note": "Original Grid Search elapsed time was not persisted by the teammate implementation.",
+    "artifact": "models/best_tree_model.pkl",
+    "feature_importance_available": true
+  },
+  "nonlinear": {
+    "owner": "Danh",
+    "algorithm": "SVC (RBF kernel)",
+    "best_params": {
+      "C": 100.0,
+      "gamma": 0.01,
+      "kernel": "rbf"
+    },
+    "best_cv_score": 0.7177682541699062,
+    "cv_std": 0.010384690830705362,
+    "teammate_reported_best_cv_score": 0.7178,
+    "elapsed_seconds": 320.0,
+    "elapsed_note": "Approximate Grid Search time reported by Danh; hardware dependent.",
+    "artifact": "models/best_nonlinear_model.pkl"
+  }
+}
