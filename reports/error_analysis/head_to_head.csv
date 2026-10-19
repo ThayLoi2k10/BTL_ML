@@ -1,0 +1,4 @@
+﻿model_a,model_b,both_correct,only_a_correct,only_b_correct,both_wrong,mcnemar_p_value
+Random Forest,Logistic Regression,1459,174,137,463,0.04104136121361278
+SVC RBF,Logistic Regression,1484,139,112,498,0.10058395491285081
+Random Forest,SVC RBF,1520,113,103,497,0.5403901087546997
