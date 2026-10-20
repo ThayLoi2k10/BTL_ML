@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "scope": "Week 4 Nhân system benchmark; prediction only; no fitting",
+  "environment": {
+    "timestamp_utc": "2026-10-20T06:12:21.240116+00:00",
+    "operating_system": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "processor": "AMD64 Family 25 Model 116 Stepping 1, AuthenticAMD",
+    "logical_cpu_count": 16,
+    "python_version": "3.13.0",
+    "python_executable": "C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "numpy_version": "2.1.2",
+    "pandas_version": "2.2.3",
+    "scikit_learn_version": "1.9.1",
+    "joblib_version": "1.6.0"
+  },
+  "methodology": {
+    "timer": "time.perf_counter_ns",
+    "input": "data/processed/X_test.parquet",
+    "input_is_preprocessed": true,
+    "preprocessing_reapplied": false,
+    "garbage_collection_paused_during_measured_loops": true,
+    "saved_estimator_execution_settings_preserved": true,
+    "model_size_unit": "decimal MB (1 MB = 1,000,000 bytes)",
+    "single_sample_index": 0,
+    "single_warmup_runs": 25,
+    "single_repeats": 200,
+    "batch_warmup_runs": 3,
+    "batch_repeats": 15
+  },
+  "test_data": {
+    "path": "data/processed/X_test.parquet",
+    "sha256": "948dc218d6de7f7e0c209a2a15cf8fb571495e8334672f3ab6760516e377b86d",
+    "rows": 2233,
+    "columns": 32,
+    "all_numeric": true,
+    "finite_values_only": true
+  },
+  "models": [
+    {
+      "family": "linear",
+      "model_name": "Logistic Regression (Tuned)",
+      "estimator_class": "LogisticRegression",
+      "artifact_path": "models/best_linear_model.pkl",
+      "artifact_sha256": "eb6e00d7a7537c18c3f13a73bc3436bb03c7a94be0882f36314dfde30e66cacd",
+      "model_size_bytes": 2575,
+      "model_size_mb": 0.002575,
+      "input_contract": {
+        "verified": true,
+        "input_representation": "preprocessed_numeric_features",
+        "preprocessing_applied_by_benchmark": false,
+        "n_features_expected": 32,
+        "feature_names_checked": true,
+        "feature_names_match": true,
+        "estimator_is_pipeline": false
+      },
+      "recorded_training_seconds": null,
+      "recorded_tuning_seconds": null,
+      "notes": [
+        "Original Grid Search elapsed time was not persisted by the teammate implementation.",
+        "Final full-train fit time was not persisted by the Week-3 implementation."
+      ],
+      "single_sample_latency_ms": {
+        "mean": 0.3601445,
+        "median": 0.349,
+        "std": 0.06773626406696785,
+        "min": 0.3366,
+        "p95": 0.3817799999999999,
+        "max": 1.0718,
+        "warmup_runs": 25,
+        "measured_runs": 200,
+        "sample_index": 0
+      },
+      "batch_latency_ms": {
+        "mean": 0.43379999999999996,
+        "median": 0.4244,
+        "std": 0.02205725882032187,
+        "min": 0.4176,
+        "p95": 0.48191,
+        "max": 0.4964,
+        "warmup_runs": 3,
+        "measured_runs": 15,
+        "samples_per_batch": 2233
+      },
+      "batch_throughput_samples_per_second": {
+        "mean": 5159725.932031924,
+        "median": 5261545.711592836,
+        "std": 239994.53593299817,
+        "min": 4498388.396454472,
+        "p95": 5339172.640382318,
+        "max": 5347222.222222222,
+        "measured_runs": 15,
+        "samples_per_batch": 2233
+      }
+    },
+    {
+      "family": "tree",
+      "model_name": "Random Forest (Tuned)",
+      "estimator_class": "RandomForestClassifier",
+      "artifact_path": "models/best_tree_model.pkl",
+      "artifact_sha256": "a7768013e4feaaca536fb858123720d24625b23f84e36d287deb44e5edb8d283",
+      "model_size_bytes": 41501817,
+      "model_size_mb": 41.501817,
+      "input_contract": {
+        "verified": true,
+        "input_representation": "preprocessed_numeric_features",
+        "preprocessing_applied_by_benchmark": false,
+        "n_features_expected": 32,
+        "feature_names_checked": true,
+        "feature_names_match": true,
+        "estimator_is_pipeline": false
+      },
+      "recorded_training_seconds": null,
+      "recorded_tuning_seconds": null,
+      "notes": [
+        "Original Grid Search elapsed time was not persisted by the teammate implementation.",
+        "Final full-train fit time was not persisted by the Week-3 implementation."
+      ],
+      "single_sample_latency_ms": {
+        "mean": 38.8096875,
+        "median": 41.1086,
+        "std": 4.89151499256557,
+        "min": 29.0385,
+        "p95": 43.64854,
+        "max": 45.3049,
+        "warmup_runs": 25,
+        "measured_runs": 200,
+        "sample_index": 0
+      },
+      "batch_latency_ms": {
+        "mean": 57.511433333333336,
+        "median": 61.5356,
+        "std": 5.758172227442392,
+        "min": 50.2492,
+        "p95": 63.90694,
+        "max": 64.1098,
+        "warmup_runs": 3,
+        "measured_runs": 15,
+        "samples_per_batch": 2233
+      },
+      "batch_throughput_samples_per_second": {
+        "mean": 39225.61529273273,
+        "median": 36287.93738908859,
+        "std": 3982.4018736589273,
+        "min": 34830.86829158725,
+        "p95": 44108.268319937124,
+        "max": 44438.51842417392,
+        "measured_runs": 15,
+        "samples_per_batch": 2233
+      }
+    },
+    {
+      "family": "nonlinear",
+      "model_name": "SVC RBF (Tuned)",
+      "estimator_class": "SVC",
+      "artifact_path": "models/best_nonlinear_model.pkl",
+      "artifact_sha256": "67cba3c461fda6b0dfcf141a1c052ed43daaa22ae703f54f2b3166e8dc2938da",
+      "model_size_bytes": 1522779,
+      "model_size_mb": 1.522779,
+      "input_contract": {
+        "verified": true,
+        "input_representation": "preprocessed_numeric_features",
+        "preprocessing_applied_by_benchmark": false,
+        "n_features_expected": 32,
+        "feature_names_checked": true,
+        "feature_names_match": true,
+        "estimator_is_pipeline": false
+      },
+      "recorded_training_seconds": 5.684,
+      "recorded_tuning_seconds": 320.0,
+      "notes": [
+        "Approximate Grid Search time reported by Danh; hardware dependent.",
+        "Full-train fit time recorded in reports/nonlinear_model_benchmark.csv."
+      ],
+      "single_sample_latency_ms": {
+        "mean": 0.8000309999999999,
+        "median": 0.7476,
+        "std": 0.14734530579221045,
+        "min": 0.6726,
+        "p95": 1.023675,
+        "max": 1.9877,
+        "warmup_runs": 25,
+        "measured_runs": 200,
+        "sample_index": 0
+      },
+      "batch_latency_ms": {
+        "mean": 634.3763266666667,
+        "median": 631.8272,
+        "std": 9.537669487631081,
+        "min": 624.787,
+        "p95": 655.12147,
+        "max": 659.2794,
+        "warmup_runs": 3,
+        "measured_runs": 15,
+        "samples_per_batch": 2233
+      },
+      "batch_throughput_samples_per_second": {
+        "mean": 3520.7710088717295,
+        "median": 3534.194159415739,
+        "std": 51.77759297148921,
+        "min": 3387.0313557499294,
+        "p95": 3571.5410393891007,
+        "max": 3574.018025343037,
+        "measured_runs": 15,
+        "samples_per_batch": 2233
+      }
+    }
+  ]
+}
