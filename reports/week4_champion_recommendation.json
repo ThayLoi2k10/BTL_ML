@@ -1,0 +1,30 @@
+{
+  "status": "provisional_recommendation_pending_team_confirmation",
+  "selected_family": "tree",
+  "selected_model": "Random Forest (Tuned)",
+  "selection_context": "offline_or_batch_bank_marketing_scoring",
+  "primary_metric": "test_macro_f1",
+  "evidence": {
+    "test_macro_f1": 0.7262630555237737,
+    "generalization_gap_cv_minus_test": -0.0029844510806151,
+    "test_recall_yes": 0.6285444234404537,
+    "single_sample_latency_ms_median": 41.1086,
+    "batch_throughput_samples_per_second_median": 36287.93738908859,
+    "model_size_mb": 41.501817,
+    "interpretability": "Medium",
+    "macro_f1_advantage_over_runner_up": 0.007807491479974393
+  },
+  "rationale": "The selected model has the highest held-out Macro-F1 and class-yes recall, a small CV-to-test gap, and measured batch throughput that supports campaign scoring on the available hardware. Its larger artifact and medium interpretability remain material trade-offs.",
+  "limitations": [
+    "No documented team approval was found; this is not a confirmed team decision.",
+    "The application has no documented latency, memory, or throughput SLA.",
+    "Person 2's Week-4 plots module/output was not available on the inspected main branch."
+  ],
+  "artifact_copy": {
+    "source_artifact": "models/best_tree_model.pkl",
+    "champion_artifact": "models/champion_model.pkl",
+    "sha256": "a7768013e4feaaca536fb858123720d24625b23f84e36d287deb44e5edb8d283",
+    "byte_identical_to_source": true,
+    "original_artifact_preserved": true
+  }
+}
