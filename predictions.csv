@@ -1,0 +1,11 @@
+age,job,marital,education,default,balance,housing,loan,contact,day,month,duration,campaign,pdays,previous,poutcome,predicted_deposit,confidence_score,probability_yes,probability_no
+59,admin.,married,secondary,no,2343,yes,no,unknown,5,may,1042,1,-1,0,unknown,yes,0.5344,0.5344,0.4656
+56,admin.,married,secondary,no,45,no,no,unknown,5,may,1467,1,-1,0,unknown,no,0.7846,0.2154,0.7846
+41,technician,married,secondary,no,1270,yes,no,unknown,5,may,1389,1,-1,0,unknown,no,0.5778,0.4222,0.5778
+55,services,married,secondary,no,2476,yes,no,unknown,5,may,579,1,-1,0,unknown,no,0.5548,0.4452,0.5548
+54,admin.,married,tertiary,no,184,no,no,unknown,5,may,673,2,-1,0,unknown,no,0.9095,0.0905,0.9095
+57,retired,single,primary,no,604,no,no,cellular,19,nov,187,1,-1,0,unknown,no,0.7476,0.2524,0.7476
+45,admin.,divorced,secondary,no,0,yes,no,cellular,17,nov,102,1,-1,0,unknown,no,0.8667,0.1333,0.8667
+48,blue-collar,married,secondary,no,238,yes,yes,cellular,2,jun,118,2,81,1,success,yes,0.5383,0.5383,0.4617
+34,admin.,single,secondary,no,673,yes,no,cellular,29,jan,89,1,260,2,failure,no,0.8071,0.1929,0.8071
+37,entrepreneur,married,tertiary,no,7944,no,no,cellular,21,nov,102,1,-1,0,unknown,no,0.5407,0.4593,0.5407
