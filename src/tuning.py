@@ -1,20 +1,4 @@
-"""Shared, train-only hyperparameter tuning utilities for Week 3.
-
-Example
--------
-    cv = make_cv_splitter("classification")
-    result = tune_model(
-        estimator=model,
-        param_grid=params,
-        cv_splitter=cv,
-        scoring_metric="f1_macro",
-        X=X_train,
-        y=y_train,
-    )
-
-This module never loads project data. Callers must pass training features and
-training labels explicitly; held-out test data belongs to later evaluation.
-"""
+"""Mô-đun tối ưu hóa siêu tham số và phân chia kiểm định chéo dùng chung."""
 
 from __future__ import annotations
 
@@ -32,17 +16,14 @@ from sklearn.model_selection import (
     StratifiedKFold,
 )
 
+from src.config import RANDOM_STATE
 
 SearchObject = GridSearchCV | RandomizedSearchCV
 
 
 @dataclass(slots=True)
 class TuningResult:
-    """Result returned after a completed cross-validation search.
-
-    ``best_estimator`` is ``None`` when ``refit=False`` because sklearn does
-    not fit a final estimator in that mode.
-    """
+    """Lưu trữ kết quả tối ưu siêu tham số bao gồm mô hình, tham số tốt nhất và thời gian thực thi."""
 
     best_estimator: BaseEstimator | None
     best_params: dict[str, Any]
@@ -54,39 +35,21 @@ class TuningResult:
 def make_cv_splitter(
     task_type: str = "classification",
     n_splits: int = 5,
-    random_state: int | None = 42,
+    random_state: int | None = RANDOM_STATE,
     shuffle: bool = True,
 ) -> StratifiedKFold | KFold:
-    """Create a reproducible cross-validation splitter.
-
-    Parameters
-    ----------
-    task_type:
-        ``"classification"`` returns :class:`StratifiedKFold`, while
-        ``"regression"`` returns :class:`KFold`.
-    n_splits:
-        Number of folds; must be at least two.
-    random_state:
-        Seed used only when ``shuffle=True``. It is set to ``None`` when
-        shuffling is disabled, as required by sklearn's splitter semantics.
-    shuffle:
-        Whether to shuffle samples before constructing folds.
-    """
-
+    """Tạo đối tượng phân chia dữ liệu kiểm định chéo StratifiedKFold hoặc KFold có thể tái lập."""
     if not isinstance(task_type, str):
-        raise TypeError("task_type must be 'classification' or 'regression'.")
+        raise TypeError("task_type phải là 'classification' hoặc 'regression'.")
     normalized_task = task_type.strip().lower()
     if normalized_task not in {"classification", "regression"}:
-        raise ValueError(
-            "task_type must be either 'classification' or 'regression'; "
-            f"received {task_type!r}."
-        )
+        raise ValueError(f"task_type không hợp lệ: {task_type!r}.")
     if isinstance(n_splits, bool) or not isinstance(n_splits, int):
-        raise TypeError("n_splits must be an integer greater than or equal to 2.")
+        raise TypeError("n_splits phải là số nguyên >= 2.")
     if n_splits < 2:
-        raise ValueError("n_splits must be greater than or equal to 2.")
+        raise ValueError("n_splits phải >= 2.")
     if not isinstance(shuffle, bool):
-        raise TypeError("shuffle must be a boolean.")
+        raise TypeError("shuffle phải là kiểu boolean.")
 
     splitter_kwargs = {
         "n_splits": n_splits,
@@ -107,7 +70,7 @@ def tune_model(
     search_type: str = "grid",
     n_iter: int = 20,
     n_jobs: int | None = -1,
-    random_state: int | None = 42,
+    random_state: int | None = RANDOM_STATE,
     verbose: int = 0,
     X: Any = None,
     y: Any = None,
@@ -115,32 +78,22 @@ def tune_model(
     return_train_score: bool = False,
     error_score: str | float = "raise",
 ) -> TuningResult:
-    """Tune any sklearn-compatible estimator using only supplied train data.
-
-    ``search_type="grid"`` uses :class:`GridSearchCV` and ignores ``n_iter``
-    and ``random_state`` because an exhaustive grid is deterministic.
-    ``search_type="random"`` uses :class:`RandomizedSearchCV` with those two
-    arguments. The function never loads or references a held-out test set.
-    """
-
+    """Thực thi tìm kiếm siêu tham số tối ưu (GridSearchCV hoặc RandomizedSearchCV) trên tập Train."""
     if estimator is None:
-        raise ValueError("estimator must not be None.")
+        raise ValueError("estimator không được để trống.")
     _validate_parameter_space(param_grid)
     if cv_splitter is None:
-        raise ValueError("cv_splitter must not be None.")
-    if scoring_metric is None or scoring_metric == "":
-        raise ValueError("scoring_metric must be supplied by the caller.")
+        raise ValueError("cv_splitter không được để trống.")
+    if not scoring_metric:
+        raise ValueError("scoring_metric phải được cung cấp.")
     if X is None or y is None:
-        raise ValueError("X and y training data must both be supplied.")
+        raise ValueError("X và y phải được cung cấp đầy đủ.")
     if not isinstance(search_type, str):
-        raise TypeError("search_type must be 'grid' or 'random'.")
+        raise TypeError("search_type phải là 'grid' hoặc 'random'.")
 
     normalized_search = search_type.strip().lower()
     if normalized_search not in {"grid", "random"}:
-        raise ValueError(
-            "search_type must be either 'grid' or 'random'; "
-            f"received {search_type!r}."
-        )
+        raise ValueError(f"search_type không hợp lệ: {search_type!r}.")
 
     common_arguments = {
         "estimator": estimator,
@@ -160,7 +113,7 @@ def tune_model(
         )
     else:
         if isinstance(n_iter, bool) or not isinstance(n_iter, int) or n_iter < 1:
-            raise ValueError("n_iter must be a positive integer for random search.")
+            raise ValueError("n_iter phải là số nguyên dương cho random search.")
         search = RandomizedSearchCV(
             param_distributions=param_grid,
             n_iter=n_iter,
@@ -182,19 +135,14 @@ def tune_model(
 
 
 def cv_results_dataframe(search_or_result: SearchObject | TuningResult) -> pd.DataFrame:
-    """Return the main reporting columns from a fitted SearchCV result.
-
-    Training-score columns are included only when the search was configured
-    with ``return_train_score=True``. No file is written.
-    """
-
+    """Trích xuất và sắp xếp bảng kết quả chi tiết từ đối tượng tìm kiếm kiểm định chéo đã fit."""
     search = (
         search_or_result.search
         if isinstance(search_or_result, TuningResult)
         else search_or_result
     )
     if not hasattr(search, "cv_results_"):
-        raise ValueError("The supplied search object has not been fitted.")
+        raise ValueError("Đối tượng tìm kiếm chưa được fit.")
 
     preferred_columns = [
         "params",
@@ -218,19 +166,18 @@ def cv_results_dataframe(search_or_result: SearchObject | TuningResult) -> pd.Da
 def _validate_parameter_space(
     param_grid: Mapping[str, Any] | Sequence[Mapping[str, Any]],
 ) -> None:
-    """Reject obviously empty or malformed search spaces."""
-
+    """Xác thực tính hợp lệ của không gian tham số đầu vào trước khi tiến hành tìm kiếm."""
     if isinstance(param_grid, Mapping):
         spaces = [param_grid]
     elif isinstance(param_grid, Sequence) and not isinstance(param_grid, (str, bytes)):
         spaces = list(param_grid)
         if not all(isinstance(space, Mapping) for space in spaces):
-            raise TypeError("Every parameter-space entry must be a mapping.")
+            raise TypeError("Mỗi phần tử trong không gian tham số phải là một mapping dictionary.")
     else:
-        raise TypeError("param_grid must be a mapping or a sequence of mappings.")
+        raise TypeError("param_grid phải là mapping hoặc chuỗi các mapping.")
 
     if not spaces or any(len(space) == 0 for space in spaces):
-        raise ValueError("param_grid must contain at least one parameter.")
+        raise ValueError("param_grid phải chứa ít nhất một tham số.")
 
 
 __all__ = [

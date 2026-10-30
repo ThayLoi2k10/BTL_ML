@@ -1,13 +1,7 @@
-"""
-Encoding, scaling and data splitting utilities for the Bank Marketing dataset.
-
-This module keeps the preprocessing configuration independent from model
-training so it can be reused in notebooks, scripts and sklearn Pipelines.
-"""
+"""Mô-đun mã hóa đặc trưng phân loại, co giãn biến số và phân chia tập dữ liệu."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import List, Sequence, Tuple
 
 import pandas as pd
@@ -15,9 +9,12 @@ from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, RobustScaler, StandardScaler
 
-TARGET_COLUMN = "deposit"
-RANDOM_STATE = 42
-TEST_SIZE = 0.2
+from src.config import (
+    RANDOM_STATE,
+    RAW_DATA_PATH,
+    TARGET_COLUMN,
+    TEST_SIZE,
+)
 
 ORDINAL_COLUMNS = ["education"]
 EDUCATION_ORDER = ["primary", "secondary", "tertiary"]
@@ -51,29 +48,9 @@ def split_data(
     random_state: int = RANDOM_STATE,
     stratify: bool = True,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Split a dataset into train/test sets with optional target stratification.
-
-    Parameters
-    ----------
-    data:
-        Full input dataframe containing features and the target column.
-    target_column:
-        Name of the target column to separate from feature columns.
-    test_size:
-        Fraction of rows reserved for the test set. Default 0.2 gives 80/20.
-    random_state:
-        Fixed random seed for reproducible splits.
-    stratify:
-        When True, pass `stratify=y` to preserve the target class ratio in
-        train and test sets. This is recommended for classification tasks.
-
-    Returns
-    -------
-    tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
-        `X_train, X_test, y_train, y_test`.
-    """
+    """Phân chia tập dữ liệu thành tập huấn luyện và kiểm thử có phân tầng nhãn mục tiêu."""
     if target_column not in data.columns:
-        raise ValueError(f"Target column '{target_column}' not found in dataframe.")
+        raise ValueError(f"Không tìm thấy cột mục tiêu '{target_column}' trong DataFrame.")
 
     X = data.drop(columns=[target_column])
     y = data[target_column]
@@ -89,10 +66,7 @@ def split_data(
 
 
 def get_transformer_configurations() -> List[Tuple[str, object, List[str]]]:
-    """Return ColumnTransformer-compatible preprocessing configurations.
-
-    Each item follows sklearn's `(name, transformer, columns)` convention.
-    """
+    """Trả về danh sách cấu hình bộ biến đổi mã hóa và co giãn cho ColumnTransformer."""
     return [
         (
             "ordinal_education",
@@ -124,13 +98,13 @@ def get_transformer_configurations() -> List[Tuple[str, object, List[str]]]:
 def build_preprocessor(
     transformer_configurations: Sequence[Tuple[str, object, List[str]]] | None = None,
 ) -> ColumnTransformer:
-    """Build the sklearn ColumnTransformer for encoding and scaling features."""
+    """Khởi tạo đối tượng ColumnTransformer áp dụng các bộ mã hóa và chuẩn hóa lên dữ liệu."""
     configurations = list(transformer_configurations or get_transformer_configurations())
     return ColumnTransformer(transformers=configurations, remainder="drop")
 
 
 def get_feature_configuration_summary() -> pd.DataFrame:
-    """Return a human-readable summary of selected encoders/scalers."""
+    """Tạo bảng tóm tắt lý do lựa chọn các phương pháp mã hóa và co giãn đặc trưng."""
     return pd.DataFrame(
         [
             {
@@ -143,54 +117,39 @@ def get_feature_configuration_summary() -> pd.DataFrame:
                 "Nhóm cột": "Biến phân loại danh nghĩa",
                 "Cột": ", ".join(ONEHOT_COLUMNS),
                 "Bộ chuyển đổi": "OneHotEncoder(handle_unknown='ignore')",
-                "Lý do": "Không áp đặt quan hệ thứ tự giả; bỏ qua nhãn lạ ở tập test để tránh lỗi.",
+                "Lý do": "Tránh áp đặt quan hệ thứ bậc giả; bỏ qua nhãn mới ở tập test.",
             },
             {
-                "Nhóm cột": "Biến số lệch/dao động lớn",
+                "Nhóm cột": "Biến số có ngoại lai và đuôi lệch",
                 "Cột": ", ".join(ROBUST_SCALING_COLUMNS),
                 "Bộ chuyển đổi": "RobustScaler",
-                "Lý do": "Các cột như balance, duration, campaign, pdays, previous dễ có ngoại lai nên dùng median và IQR bền vững hơn.",
+                "Lý do": "Dùng trung vị và khoảng tứ phân vị IQR bền vững với giá trị ngoại lai.",
             },
             {
-                "Nhóm cột": "Biến số ổn định hơn",
+                "Nhóm cột": "Biến số phân bố tương đối đều",
                 "Cột": ", ".join(STANDARD_SCALING_COLUMNS),
                 "Bộ chuyển đổi": "StandardScaler",
-                "Lý do": "age và day có miền giá trị rõ hơn, phù hợp chuẩn hóa về mean=0 và std=1.",
+                "Lý do": "Chuẩn hóa về trung bình 0 và phương sai 1 cho biến tuổi và ngày.",
             },
         ]
     )
 
 
 def _load_default_dataset() -> pd.DataFrame:
-    """Load the project dataset when this file is executed directly."""
-    project_root = Path(__file__).resolve().parents[1]
-    dataset_path = project_root / "data" / "raw" / "bank.csv"
-    return pd.read_csv(dataset_path)
+    """Nạp tệp dữ liệu gốc từ đường dẫn cấu hình mặc định."""
+    return pd.read_csv(RAW_DATA_PATH)
 
 
 def main() -> None:
-    """Run a small smoke test showing the split and preprocessing setup."""
+    """Thực thi kiểm tra mẫu quy trình phân tách và tiền xử lý mã hóa dữ liệu."""
     data = _load_default_dataset()
     X_train, X_test, y_train, y_test = split_data(data)
 
-    print("Encoding, Scaling & Splitting smoke test")
-    print("=" * 50)
-    print(f"Dataset shape: {data.shape}")
-    print(f"X_train: {X_train.shape} | X_test: {X_test.shape}")
-    print(f"y_train: {y_train.shape} | y_test: {y_test.shape}")
-    print("\nTarget distribution:")
-    print(pd.DataFrame({"train": y_train.value_counts(normalize=True), "test": y_test.value_counts(normalize=True)}))
-
-    print("\nTransformer configurations:")
-    for name, transformer, columns in get_transformer_configurations():
-        print(f"- {name}: {transformer.__class__.__name__} -> {columns}")
-
+    print("Kiểm thử phân tách dữ liệu và cấu hình biến đổi:")
+    print(f"Kích thước tập Train: {X_train.shape} | Tập Test: {X_test.shape}")
     preprocessor = build_preprocessor()
-    X_train_transformed = preprocessor.fit_transform(X_train)
-    X_test_transformed = preprocessor.transform(X_test)
-    print("\nTransformed shapes:")
-    print(f"X_train_transformed: {X_train_transformed.shape}")
-    print(f"X_test_transformed: {X_test_transformed.shape}")
+    X_train_trans = preprocessor.fit_transform(X_train)
+    print(f"Kích thước sau biến đổi: {X_train_trans.shape}")
 
 
 if __name__ == "__main__":

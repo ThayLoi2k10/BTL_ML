@@ -73,3 +73,20 @@ git push origin feature-ten_ban
 ## 4. Lưu ý quan trọng
 * **Dữ liệu thô:** Tải file dữ liệu gốc từ Drive chung về, đổi tên thành `dataset.csv` và bỏ vào thư mục `data/raw/`. File này đã được chặn trong `.gitignore`, tuyệt đối không cố ép đẩy lên GitHub.
 * **Kernel Notebook:** Khi mở file `.ipynb` trên VS Code, bấm vào nút chọn **Kernel** ở góc trên cùng bên phải và chọn đúng **`Python (BTL_ML)`**.
+
+
+
+# Code chạy:
+```powershell
+python src/predict.py --input data/sample_test.csv --output data/predictions_test.csv
+
+streamlit run app.py
+
+python run_pipeline.py --mode preprocess
+
+python run_pipeline.py --mode evaluate
+
+python run_pipeline.py --mode predict
+
+python run_pipeline.py --mode all
+```

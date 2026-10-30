@@ -1,9 +1,4 @@
-"""Leakage-safe Week-2 preprocessing integration for the bank dataset.
-
-The module composes the inherited cleaning and encoding/scaling work with
-Danh's feature engineering and the single Mutual Information selector.  It
-does not train or evaluate a predictive model.
-"""
+"""Mô-đun tích hợp đường ống tiền xử lý chống rò rỉ dữ liệu cho tập dữ liệu Bank Marketing."""
 
 from __future__ import annotations
 
@@ -19,9 +14,17 @@ from sklearn.preprocessing import OneHotEncoder, RobustScaler
 from sklearn.utils.validation import check_is_fitted
 
 from src.cleaning import MissingHandler, OutlierClipper, StringCleaner
-from src.encoding_scaling import (
+from src.config import (
+    DATA_PROCESSED_DIR,
+    LEAKAGE_COLUMNS,
+    MODEL_INPUT_COLUMNS,
+    PREPROCESSING_PIPELINE_PATH,
     RANDOM_STATE,
+    RAW_DATA_PATH,
+    RAW_FEATURE_COLUMNS,
     TARGET_COLUMN,
+)
+from src.encoding_scaling import (
     build_preprocessor,
     get_transformer_configurations,
 )
@@ -31,37 +34,9 @@ from src.feature_engineering import (
     MutualInformationSelector,
 )
 
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATA_PATH = PROJECT_ROOT / "data" / "raw" / "bank.csv"
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "preprocessing_pipeline.pkl"
-DEFAULT_PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
-
-RAW_FEATURE_COLUMNS = (
-    "age",
-    "job",
-    "marital",
-    "education",
-    "default",
-    "balance",
-    "housing",
-    "loan",
-    "contact",
-    "day",
-    "month",
-    "duration",
-    "campaign",
-    "pdays",
-    "previous",
-    "poutcome",
-)
-
-# duration is observed during/after the current call.  Week-1 evidence marks it
-# as leakage for the intended pre-call prediction setting.
-LEAKAGE_COLUMNS = ("duration",)
-MODEL_INPUT_COLUMNS = tuple(
-    column for column in RAW_FEATURE_COLUMNS if column not in LEAKAGE_COLUMNS
-)
+DEFAULT_DATA_PATH = RAW_DATA_PATH
+DEFAULT_MODEL_PATH = PREPROCESSING_PIPELINE_PATH
+DEFAULT_PROCESSED_DIR = DATA_PROCESSED_DIR
 
 ENGINEERED_CATEGORICAL_COLUMNS = ("age_group",)
 ENGINEERED_CONTINUOUS_COLUMNS = (
@@ -92,22 +67,9 @@ ENGINEERED_BINARY_COLUMNS = (
     "contact_known",
 )
 
-_GROUPED_ENGINEERED_COLUMNS = (
-    *ENGINEERED_CATEGORICAL_COLUMNS,
-    *ENGINEERED_CONTINUOUS_COLUMNS,
-    *ENGINEERED_BINARY_COLUMNS,
-)
-if set(_GROUPED_ENGINEERED_COLUMNS) != set(ENGINEERED_FEATURES):
-    raise RuntimeError("Every engineered feature must appear in one encoding group.")
-
 
 class PreCallSchemaGuard(BaseEstimator, TransformerMixin):
-    """Validate raw schema, record fit rows, and remove pre-call leakage fields.
-
-    ``duration`` is optional at inference: if supplied it is removed; if absent,
-    the remaining pre-call schema is still accepted.  Any unknown/identifier-like
-    column is rejected rather than silently entering preprocessing.
-    """
+    """Xác thực lược đồ dữ liệu đầu vào và chủ động loại bỏ cột thời lượng cuộc gọi rò rỉ."""
 
     def __init__(
         self,
@@ -115,11 +77,13 @@ class PreCallSchemaGuard(BaseEstimator, TransformerMixin):
         leakage_columns: tuple[str, ...] = LEAKAGE_COLUMNS,
         target_column: str = TARGET_COLUMN,
     ):
+        """Khởi tạo danh sách các cột hợp lệ bắt buộc và cột rò rỉ cần loại trừ."""
         self.required_columns = required_columns
         self.leakage_columns = leakage_columns
         self.target_column = target_column
 
-    def fit(self, X: pd.DataFrame, y=None):
+    def fit(self, X: pd.DataFrame, y=None) -> PreCallSchemaGuard:
+        """Kiểm tra tính hợp lệ của dữ liệu huấn luyện và ghi nhận các cột đầu ra hợp lệ."""
         X = self._validate(X)
         self.feature_names_in_ = np.asarray(X.columns, dtype=object)
         self.n_features_in_ = len(self.feature_names_in_)
@@ -132,21 +96,22 @@ class PreCallSchemaGuard(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Trích xuất và trả về đúng tập hợp các đặc trưng hợp lệ trước thời điểm cuộc gọi."""
         check_is_fitted(self, "feature_names_out_")
         X = self._validate(X)
         return X.loc[:, self.required_columns].copy()
 
     def get_feature_names_out(self, input_features: Sequence[str] | None = None):
+        """Trả về danh sách tên các đặc trưng hợp lệ sau bước bảo vệ lược đồ."""
         check_is_fitted(self, "feature_names_out_")
         return self.feature_names_out_.copy()
 
     def _validate(self, X) -> pd.DataFrame:
+        """Kiểm tra kiểu dữ liệu DataFrame, ngăn chặn rò rỉ nhãn và kiểm tra cột thiếu hoặc lạ."""
         if not isinstance(X, pd.DataFrame):
-            raise TypeError("The integrated pipeline requires pandas DataFrame input.")
+            raise TypeError("Pipeline yêu cầu đầu vào là pandas DataFrame.")
         if self.target_column in X.columns:
-            raise ValueError(
-                f"Target column '{self.target_column}' must be separated before fit."
-            )
+            raise ValueError(f"Cột mục tiêu '{self.target_column}' phải được tách riêng trước khi xử lý.")
 
         required = set(self.required_columns)
         allowed = required.union(self.leakage_columns)
@@ -154,29 +119,20 @@ class PreCallSchemaGuard(BaseEstimator, TransformerMixin):
         unexpected = sorted(set(X.columns).difference(allowed))
         if missing or unexpected:
             raise ValueError(
-                "Raw feature schema mismatch. "
-                f"Missing={missing}; unexpected={unexpected}."
+                f"Lược đồ đặc trưng không khớp. Thiếu={missing}; Thừa={unexpected}."
             )
         return X
 
 
 def get_integrated_transformer_configurations():
-    """Extend Trí's transformer configuration without rewriting it.
-
-    The inherited configurations are cloned, ``duration`` is filtered because
-    the schema guard removes it, and three groups for the 24 engineered
-    features are appended.
-    """
-
+    """Mở rộng cấu hình ColumnTransformer kết hợp biến gốc đã lọc và 24 biến kỹ nghệ mới."""
     configurations = []
     available = set(MODEL_INPUT_COLUMNS).union(ENGINEERED_FEATURES)
 
     for name, transformer, columns in get_transformer_configurations():
         retained_columns = [column for column in columns if column in available]
         if retained_columns:
-            configurations.append(
-                (name, clone(transformer), retained_columns)
-            )
+            configurations.append((name, clone(transformer), retained_columns))
 
     configurations.extend(
         [
@@ -204,12 +160,7 @@ def build_preprocessing_pipeline(
     selected_feature_count: int = 32,
     random_state: int = RANDOM_STATE,
 ) -> Pipeline:
-    """Build the complete Week-2 preprocessing pipeline.
-
-    The caller must first split raw data, then call ``fit(X_train, y_train)``.
-    The returned pipeline must only call ``transform`` on X_test.
-    """
-
+    """Xây dựng chuỗi Pipeline tiền xử lý hoàn chỉnh từ kiểm tra lược đồ đến chọn lọc Mutual Information."""
     encoder = build_preprocessor(get_integrated_transformer_configurations())
     encoder.set_output(transform="pandas")
 
@@ -233,27 +184,24 @@ def build_preprocessing_pipeline(
 
 
 def load_correct_dataset(path: str | Path = DEFAULT_DATA_PATH) -> pd.DataFrame:
-    """Load and validate the verified Bank Marketing CSV."""
-
+    """Nạp và kiểm tra tính toàn vẹn của tệp dữ liệu gốc bank.csv."""
     path = Path(path)
     if not path.is_file():
-        raise FileNotFoundError(f"Correct dataset not found: {path}")
+        raise FileNotFoundError(f"Không tìm thấy tệp dữ liệu tại: {path}")
 
     data = pd.read_csv(path)
     expected_columns = [*RAW_FEATURE_COLUMNS, TARGET_COLUMN]
     if data.columns.tolist() != expected_columns:
         raise ValueError(
-            "Dataset schema does not match the verified bank.csv. "
-            f"Expected={expected_columns}; actual={data.columns.tolist()}."
+            f"Lược đồ tập dữ liệu không khớp. Mong đợi={expected_columns}; Thực tế={data.columns.tolist()}."
         )
     if set(data[TARGET_COLUMN].dropna().unique()) != {"no", "yes"}:
-        raise ValueError("Target 'deposit' must contain exactly {'no', 'yes'}.")
+        raise ValueError("Cột mục tiêu 'deposit' phải chứa chính xác hai nhãn {'no', 'yes'}.")
     return data
 
 
 def get_fitted_pipeline_summary(pipeline: Pipeline) -> dict:
-    """Return inspectable dimensions and feature names from a fitted pipeline."""
-
+    """Trích xuất tóm tắt số lượng chiều đặc trưng và danh sách tên cột qua từng bước của pipeline."""
     guard = pipeline.named_steps["schema_guard"]
     engineer = pipeline.named_steps["feature_engineering"]
     encoder = pipeline.named_steps["encoding_scaling"]
@@ -284,27 +232,26 @@ def validate_transformed_splits(
     expected_train_rows: int | None = None,
     expected_test_rows: int | None = None,
 ) -> dict:
-    """Assert compatible, finite, target-free train/test feature matrices."""
-
+    """Kiểm tra tính đồng nhất, hữu hạn và không chứa rò rỉ nhãn giữa hai tập Train và Test."""
     if not isinstance(X_train_transformed, pd.DataFrame) or not isinstance(
         X_test_transformed, pd.DataFrame
     ):
-        raise TypeError("Transformed train/test outputs must be pandas DataFrames.")
+        raise TypeError("Dữ liệu biến đổi phải ở định dạng pandas DataFrame.")
     if list(X_train_transformed.columns) != list(X_test_transformed.columns):
-        raise ValueError("Transformed train and test schemas do not match.")
+        raise ValueError("Lược đồ cột của tập Train và Test không đồng nhất.")
     if TARGET_COLUMN in X_train_transformed.columns:
-        raise ValueError("Target leaked into transformed features.")
+        raise ValueError("Cột mục tiêu bị rò rỉ vào ma trận đặc trưng.")
     if any("duration" in str(column).lower() for column in X_train_transformed.columns):
-        raise ValueError("Leakage-prone duration remains in transformed features.")
+        raise ValueError("Biến rò rỉ duration vẫn còn tồn tại trong ma trận đặc trưng.")
     if expected_train_rows is not None and len(X_train_transformed) != expected_train_rows:
-        raise ValueError("Unexpected transformed training row count.")
+        raise ValueError("Số lượng dòng tập Train biến đổi không khớp kỳ vọng.")
     if expected_test_rows is not None and len(X_test_transformed) != expected_test_rows:
-        raise ValueError("Unexpected transformed test row count.")
+        raise ValueError("Số lượng dòng tập Test biến đổi không khớp kỳ vọng.")
 
     train_values = X_train_transformed.to_numpy(dtype=float)
     test_values = X_test_transformed.to_numpy(dtype=float)
     if not np.isfinite(train_values).all() or not np.isfinite(test_values).all():
-        raise ValueError("Transformed data contains NaN or infinity.")
+        raise ValueError("Ma trận đặc trưng biến đổi chứa NaN hoặc vô cùng.")
 
     return {
         "train_shape": tuple(X_train_transformed.shape),
@@ -321,8 +268,7 @@ def save_preprocessing_artifact(
     pipeline: Pipeline,
     path: str | Path = DEFAULT_MODEL_PATH,
 ) -> Path:
-    """Serialize a fitted preprocessing pipeline with joblib."""
-
+    """Lưu trữ đối tượng Pipeline tiền xử lý đã fit thành tệp tin nhị phân joblib."""
     check_is_fitted(pipeline.named_steps["feature_selection"], "selected_indices_")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -337,8 +283,7 @@ def save_processed_splits(
     y_test: pd.Series,
     directory: str | Path = DEFAULT_PROCESSED_DIR,
 ) -> dict[str, Path]:
-    """Save transformed splits as Parquet files, preserving row order."""
-
+    """Lưu trữ các tập dữ liệu đã biến đổi thành các tệp Parquet nhằm tăng tốc độ nạp."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     paths = {
@@ -362,8 +307,7 @@ def save_processed_splits(
 def load_processed_splits(
     directory: str | Path = DEFAULT_PROCESSED_DIR,
 ) -> dict[str, pd.DataFrame]:
-    """Reload the four generated Parquet splits for validation."""
-
+    """Nạp lại 4 tập dữ liệu huấn luyện và kiểm thử dạng Parquet đã tiền xử lý."""
     directory = Path(directory)
     return {
         name: pd.read_parquet(directory / f"{name}.parquet")

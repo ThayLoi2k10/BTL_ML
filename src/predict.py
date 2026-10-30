@@ -1,38 +1,43 @@
-"""Command-line inference script for predicting bank deposit subscription.
-
-Author: Lợi (Person 1 - Deploy & Inference)
-Usage:
-    python src/predict.py --input data/sample_test.csv --output predictions.csv
-"""
+"""Kịch bản suy luận dòng lệnh (CLI) phân loại khả năng đăng ký tiền gửi ngân hàng."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import warnings
 from pathlib import Path
 from typing import Any
 
-import joblib
-import numpy as np
-import pandas as pd
-
-warnings.filterwarnings("ignore", category=UserWarning)
-
-# Safe relative paths resolution based on project root
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-DEFAULT_PIPELINE_PATH = PROJECT_ROOT / "models" / "preprocessing_pipeline.pkl"
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "champion_model.pkl"
-DEFAULT_INPUT_PATH = PROJECT_ROOT / "data" / "sample_test.csv"
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+import joblib
+import numpy as np
+import pandas as pd
+
+from src.config import (
+    CHAMPION_MODEL_PATH,
+    PREPROCESSING_PIPELINE_PATH,
+    SAMPLE_TEST_PATH,
+)
+
+warnings.filterwarnings("ignore", category=UserWarning)
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+DEFAULT_PIPELINE_PATH = PREPROCESSING_PIPELINE_PATH
+DEFAULT_MODEL_PATH = CHAMPION_MODEL_PATH
+DEFAULT_INPUT_PATH = SAMPLE_TEST_PATH
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "predictions.csv"
 
 
 def ensure_unpickle_compatibility() -> None:
-    """Ensure compatibility across scikit-learn versions during unpickling."""
+    """Đảm bảo tính tương thích khi unpickle mô hình giữa các phiên bản scikit-learn."""
     import sklearn.compose._column_transformer as ct
 
     if not hasattr(ct, "_RemainderColsList"):
@@ -46,19 +51,15 @@ def load_artifacts(
     pipeline_path: Path | str = DEFAULT_PIPELINE_PATH,
     model_path: Path | str = DEFAULT_MODEL_PATH,
 ) -> tuple[Any, Any]:
-    """Load fitted preprocessing pipeline and champion predictive model."""
+    """Nạp pipeline tiền xử lý và mô hình champion từ tệp nhị phân."""
     ensure_unpickle_compatibility()
     pipeline_path = Path(pipeline_path)
     model_path = Path(model_path)
 
     if not pipeline_path.exists():
-        raise FileNotFoundError(
-            f"Preprocessing pipeline not found at '{pipeline_path}'."
-        )
+        raise FileNotFoundError(f"Không tìm thấy pipeline tiền xử lý tại: '{pipeline_path}'.")
     if not model_path.exists():
-        raise FileNotFoundError(
-            f"Champion model not found at '{model_path}'."
-        )
+        raise FileNotFoundError(f"Không tìm thấy mô hình champion tại: '{model_path}'.")
 
     pipeline = joblib.load(pipeline_path)
     model = joblib.load(model_path)
@@ -71,10 +72,9 @@ def predict(
     model: Any,
     pos_label: str = "yes",
 ) -> pd.DataFrame:
-    """Transform input features and generate predictions with confidence probabilities."""
+    """Chuyển hóa dữ liệu thô qua pipeline và sinh nhãn dự đoán kèm điểm độ tin cậy."""
     df_raw = input_data.copy()
 
-    # If ground-truth 'deposit' exists in the input, separate it to avoid pipeline guard error
     actual_labels = None
     if "deposit" in df_raw.columns:
         actual_labels = df_raw["deposit"].copy()
@@ -82,13 +82,9 @@ def predict(
     else:
         features_to_transform = df_raw
 
-    # Transform raw data through Week 2 preprocessing pipeline
     X_transformed = pipeline.transform(features_to_transform)
-
-    # Predict class labels
     predictions = model.predict(X_transformed)
 
-    # Compute prediction probabilities and confidence scores
     if hasattr(model, "predict_proba"):
         probabilities = model.predict_proba(X_transformed)
         classes = list(getattr(model, "classes_", ["no", "yes"]))
@@ -100,7 +96,6 @@ def predict(
         confidence = np.max(probabilities, axis=1)
     elif hasattr(model, "decision_function"):
         decisions = model.decision_function(X_transformed)
-        # Platt sigmoid mapping for decision values
         prob_pos = 1.0 / (1.0 + np.exp(-decisions))
         prob_neg = 1.0 - prob_pos
         confidence = np.maximum(prob_pos, prob_neg)
@@ -122,79 +117,78 @@ def predict(
     return result_df
 
 
-def parse_arguments() -> argparse.Namespace:
-    """Parse command-line arguments."""
+def parse_arguments(args: Sequence[str] | None = None) -> argparse.Namespace:
+    """Thiết lập và phân tích các đối số dòng lệnh CLI đầu vào."""
     parser = argparse.ArgumentParser(
-        description="Run batch inference using Week 4 Champion Model.",
+        description="Thực thi dự đoán hàng loạt bằng mô hình Champion.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        allow_abbrev=False,
     )
     parser.add_argument(
         "-i",
         "--input",
         type=str,
         default=str(DEFAULT_INPUT_PATH),
-        help="Path to the input CSV file containing raw customer data.",
+        help="Đường dẫn đến file CSV chứa dữ liệu khách hàng cần dự đoán.",
     )
     parser.add_argument(
         "-o",
         "--output",
         type=str,
         default=str(DEFAULT_OUTPUT_PATH),
-        help="Path where output predictions CSV will be saved.",
+        help="Đường dẫn lưu tệp kết quả dự đoán CSV.",
     )
     parser.add_argument(
         "--pipeline",
         type=str,
         default=str(DEFAULT_PIPELINE_PATH),
-        help="Path to fitted preprocessing pipeline artifact.",
+        help="Đường dẫn đến pipeline tiền xử lý.",
     )
     parser.add_argument(
         "--model",
         type=str,
         default=str(DEFAULT_MODEL_PATH),
-        help="Path to trained champion model artifact.",
+        help="Đường dẫn đến mô hình champion.",
     )
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
-def main() -> None:
-    args = parse_arguments()
+def main(argv: Sequence[str] | None = None) -> None:
+    """Thực thi toàn bộ luồng dự đoán dòng lệnh hàng loạt từ tệp CSV."""
+    args = parse_arguments(argv)
     input_path = Path(args.input)
     output_path = Path(args.output)
     pipeline_path = Path(args.pipeline)
     model_path = Path(args.model)
 
     print("=" * 70)
-    print(" BANK MARKETING TERM DEPOSIT - BATCH INFERENCE SYSTEM")
+    print(" HỆ THỐNG DỰ ĐOÁN TIỀN GỬI NGÂN HÀNG - DÒNG LỆNH (BATCH CLI)")
     print("=" * 70)
-    print(f"[*] Input Data       : {input_path}")
-    print(f"[*] Output File      : {output_path}")
-    print(f"[*] Pipeline Artifact: {pipeline_path}")
-    print(f"[*] Champion Model   : {model_path}")
+    print(f"[*] Dữ liệu đầu vào : {input_path}")
+    print(f"[*] Tệp kết quả lưu  : {output_path}")
+    print(f"[*] Pipeline artifact: {pipeline_path}")
+    print(f"[*] Mô hình champion : {model_path}")
     print("-" * 70)
 
     if not input_path.exists():
-        print(f"[!] Error: Input file '{input_path}' does not exist.")
+        print(f"[!] Lỗi: Tệp đầu vào '{input_path}' không tồn tại.")
         sys.exit(1)
 
-    print("[*] Loading input data...")
+    print("[*] Đang nạp dữ liệu đầu vào...")
     input_df = pd.read_csv(input_path)
-    print(f"    Loaded {len(input_df)} records across {len(input_df.columns)} columns.")
+    print(f"    Đã nạp {len(input_df)} bản ghi.")
 
-    print("[*] Loading ML artifacts...")
+    print("[*] Đang nạp mô hình và pipeline...")
     pipeline, model = load_artifacts(pipeline_path, model_path)
-    print(f"    Loaded Pipeline: {pipeline.__class__.__name__}")
-    print(f"    Loaded Model   : {model.__class__.__name__}")
 
-    print("[*] Running inference pipeline...")
+    print("[*] Đang thực thi suy luận dự đoán...")
     results_df = predict(input_df, pipeline, model)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(output_path, index=False)
-    print(f"[+] Predictions saved successfully to: {output_path}")
+    print(f"[+] Đã lưu kết quả thành công tại: {output_path}")
     print("-" * 70)
 
-    # Display preview in terminal
     preview_cols = [
         col
         for col in [
@@ -211,14 +205,14 @@ def main() -> None:
         if col in results_df.columns
     ]
 
-    print("[*] INFERENCE RESULTS PREVIEW:")
+    print("[*] XEM TRƯỚC KẾT QUẢ DỰ ĐOÁN:")
     print(results_df[preview_cols].to_string(index=True))
     print("-" * 70)
 
     counts = results_df["predicted_deposit"].value_counts().to_dict()
-    print(f"[*] Summary Statistics: {counts}")
+    print(f"[*] Thống kê kết quả : {counts}")
     mean_conf = results_df["confidence_score"].mean()
-    print(f"[*] Average Confidence: {mean_conf:.2%}")
+    print(f"[*] Độ tin cậy TB     : {mean_conf:.2%}")
     print("=" * 70)
 
 

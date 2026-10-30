@@ -1,28 +1,4 @@
-"""Error analysis and model blind-spot diagnosis for Week 4.
-
-Author: Danh (Person 3 - Error Analysis)
-Responsibilities:
-1. Receive the unified test predictions from Person 1 (``metrics.py``) and
-   extract every misclassified test row (y_true != y_pred), plus the rows with
-   the largest raw residual |y_true - y_prob| (the regression-style view).
-2. Map each processed test row back to its original row in ``data/raw/bank.csv``
-   (before cleaning, clipping, encoding and scaling) so the real attribute
-   values can be inspected.
-3. Profile False Positives / False Negatives: rare categories, rows close to the
-   decision boundary, rows whose features were altered by imputation
-   ('unknown' -> 'missing') or by IQR clipping.
-4. Head-to-head comparison between model families (Tree vs Linear, ...):
-   find rows one family gets right and the other gets wrong, with an exact
-   McNemar test.
-5. Select 5-10 representative errors and attach a rule-based technical
-   diagnosis for each one, to be refined in report Section 5.2.
-
-The split is reproduced exactly as in ``notebooks/04_features_pipeline.ipynb``
-(``split_data`` with test_size=0.2, stratify=True, random_state=42).  The row
-order of ``X_test.parquet`` / ``test_predictions.parquet`` is the order of the
-raw ``X_test`` after ``reset_index(drop=True)``, so positional alignment plus a
-label check is sufficient to recover the raw index.
-"""
+"""Module phân tích sai số (Error Analysis) và chẩn đoán điểm mù của mô hình."""
 
 from __future__ import annotations
 
@@ -31,20 +7,25 @@ from math import comb
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-import pandas as pd
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.cleaning import OutlierClipper  # noqa: E402
-from src.encoding_scaling import TARGET_COLUMN, split_data  # noqa: E402
-from src.pipeline import LEAKAGE_COLUMNS, load_correct_dataset  # noqa: E402
+import numpy as np
+import pandas as pd
 
-RAW_DATA_PATH = PROJECT_ROOT / "data" / "raw" / "bank.csv"
-PROCESSED_DATA_DIR = PROJECT_ROOT / "data" / "processed"
-REPORTS_DIR = PROJECT_ROOT / "reports"
+from src.cleaning import MissingHandler, OutlierClipper
+from src.config import (
+    DATA_RAW_DIR,
+    LEAKAGE_COLUMNS,
+    PROCESSED_DATA_DIR,
+    PROJECT_ROOT,
+    RAW_DATA_PATH,
+    REPORTS_DIR,
+    TARGET_COLUMN,
+)
+from src.encoding_scaling import split_data
+from src.pipeline import load_correct_dataset
 PREDICTIONS_PATH = REPORTS_DIR / "test_predictions.parquet"
 OUTPUT_DIR = REPORTS_DIR / "error_analysis"
 
@@ -90,7 +71,7 @@ KNN_NEIGHBORS = 15
 # 1. Loading and raw-index mapping
 # ---------------------------------------------------------------------------
 def load_predictions(path: str | Path = PREDICTIONS_PATH) -> pd.DataFrame:
-    """Load the unified prediction table produced by Person 1."""
+    """Nạp tệp dữ liệu dự đoán kiểm thử dạng parquet hoặc csv."""
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(
@@ -105,12 +86,7 @@ def load_raw_splits(
     data_path: str | Path = RAW_DATA_PATH,
     processed_dir: str | Path = PROCESSED_DATA_DIR,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Reproduce the Week-2 split on the raw CSV and validate it.
-
-    Returns raw ``X_train, X_test, y_train, y_test`` whose index is the row
-    position in ``bank.csv``.  Raises if the reproduced test labels do not match
-    ``y_test.parquet`` row by row.
-    """
+    """Nạp các tệp dữ liệu phân tách gốc phục vụ phân tích lỗi sâu."""
     data = load_correct_dataset(data_path)
     X_train, X_test, y_train, y_test = split_data(data, target_column=TARGET_COLUMN)
 
@@ -127,13 +103,13 @@ def load_raw_splits(
 
 
 def compute_clip_bounds(X_train: pd.DataFrame) -> dict[str, tuple[float, float]]:
-    """Recompute the IQR clipping bounds that the pipeline learned on X_train."""
+    """Tính toán các ngưỡng ngoại lai IQR phục vụ gắn cờ dữ liệu ngoại lai."""
     clipper = OutlierClipper().fit(X_train.drop(columns=list(LEAKAGE_COLUMNS)))
     return {col: tuple(map(float, b)) for col, b in clipper.bounds_.items()}
 
 
 def compute_train_frequencies(X_train: pd.DataFrame) -> dict[str, dict[str, float]]:
-    """Share of each category in the training set (used to flag rare groups)."""
+    """Tính toán phân bố tần suất giá trị đặc trưng trên tập huấn luyện."""
     return {
         col: X_train[col].value_counts(normalize=True).to_dict()
         for col in CATEGORICAL_COLUMNS
@@ -144,13 +120,7 @@ def compute_knn_yes_share(
     processed_dir: str | Path = PROCESSED_DATA_DIR,
     n_neighbors: int = KNN_NEIGHBORS,
 ) -> np.ndarray:
-    """Share of 'yes' among the k nearest *training* rows of each test row.
-
-    Distances are computed in the processed 32-feature space the models
-    actually see.  A FN whose neighbours are mostly 'no' (or a FP whose
-    neighbours are mostly 'yes') lies in a region where the classes overlap:
-    no model trained on these features can separate it reliably.
-    """
+    """Ước lượng tỷ lệ lân cận K-NN có nhãn dương tính để đo độ cô lập của mẫu."""
     from sklearn.neighbors import NearestNeighbors
 
     processed_dir = Path(processed_dir)
@@ -165,7 +135,7 @@ def compute_knn_yes_share(
 
 
 def _outcome(y_true: pd.Series, y_pred: pd.Series) -> pd.Series:
-    """Label each row as TP / TN / FP / FN with 'yes' as the positive class."""
+    """Phân loại kết quả dự đoán thành TP, TN, FP hoặc FN."""
     t = y_true == POS_LABEL
     p = y_pred == POS_LABEL
     return pd.Series(
@@ -178,25 +148,7 @@ def build_analysis_frame(
     predictions: pd.DataFrame | None = None,
     model_keys: tuple[str, ...] = MODEL_KEYS,
 ) -> pd.DataFrame:
-    """Join raw test attributes with every model's prediction and diagnostics.
-
-    Output columns
-    --------------
-    raw_index                  : row position in data/raw/bank.csv
-    <raw features>             : original, unscaled values (``duration`` is kept
-                                 for post-hoc diagnosis only; models never saw it)
-    y_true, y_true_binary
-    y_pred_<m>, y_prob_<m>     : from Person 1
-    correct_<m>, outcome_<m>   : bool / TP-TN-FP-FN
-    margin_<m>                 : |p - 0.5|, distance to the 0.5 threshold
-    residual_<m>               : |y_true_binary - y_prob|
-    near_boundary_<m>          : margin < BOUNDARY_MARGIN
-    imputed_cols / n_imputed   : columns whose 'unknown' became 'missing'
-    clipped_cols / n_clipped   : columns altered by IQR clipping
-    rare_cols / n_rare         : categories with train share < RARE_THRESHOLD
-    never_contacted            : pdays == -1 (no previous campaign)
-    knn_yes_share              : share of 'yes' among the 15 nearest train rows
-    """
+    """Xây dựng bảng tổng hợp đặc trưng và kết quả phân loại phục vụ chẩn đoán lỗi."""
     if predictions is None:
         predictions = load_predictions()
 
@@ -273,7 +225,7 @@ RAW_VIEW_COLUMNS = ["raw_index", *NUMERIC_COLUMNS, *CATEGORICAL_COLUMNS, "y_true
 
 
 def extract_misclassified(frame: pd.DataFrame, model_key: str) -> pd.DataFrame:
-    """All test rows where y_true != y_pred, most confident errors first."""
+    """Trích xuất danh sách tất cả các trường hợp bị mô hình phân loại sai."""
     cols = [
         *RAW_VIEW_COLUMNS,
         f"y_pred_{model_key}",
@@ -297,11 +249,7 @@ def largest_absolute_errors(
     top_k: int = 20,
     index: pd.Index | np.ndarray | None = None,
 ) -> pd.DataFrame:
-    """Generic top-k |y_true - y_score| extractor.
-
-    For regression ``y_score`` is the predicted value; for classification it is
-    the positive-class probability and ``y_true`` the 0/1 label.
-    """
+    """Trích xuất các mẫu có độ lệch xác suất dự đoán lớn nhất so với thực tế."""
     y_true = np.asarray(y_true, dtype=float)
     y_score = np.asarray(y_score, dtype=float)
     index = np.arange(len(y_true)) if index is None else np.asarray(index)
@@ -318,7 +266,7 @@ def largest_absolute_errors(
 
 
 def largest_residuals(frame: pd.DataFrame, model_key: str, top_k: int = 20) -> pd.DataFrame:
-    """Top-k raw residuals of a model, joined back to raw attributes."""
+    """Tính toán các mẫu có phần dư sai số lớn nhất hỗ trợ bài toán hồi quy."""
     top = largest_absolute_errors(
         frame["y_true_binary"], frame[f"y_prob_{model_key}"], top_k, frame["raw_index"]
     )
@@ -337,7 +285,7 @@ def largest_residuals(frame: pd.DataFrame, model_key: str, top_k: int = 20) -> p
 # 3. FP / FN profiling
 # ---------------------------------------------------------------------------
 def summarize_outcomes(frame: pd.DataFrame, model_keys: tuple[str, ...] = MODEL_KEYS) -> pd.DataFrame:
-    """Confusion counts and error-confidence statistics per model."""
+    """Thống kê ma trận số lượng và tỷ lệ các nhóm kết quả TP, TN, FP, FN."""
     records = []
     for m in model_keys:
         outcome = frame[f"outcome_{m}"]
@@ -362,11 +310,7 @@ def summarize_outcomes(frame: pd.DataFrame, model_keys: tuple[str, ...] = MODEL_
 
 
 def compare_error_groups(frame: pd.DataFrame, model_key: str) -> pd.DataFrame:
-    """Median raw numeric values and flag rates for TP / TN / FP / FN groups.
-
-    Reading guide: FN should be compared with TP (same true class 'yes'),
-    FP with TN (same true class 'no').
-    """
+    """So sánh giá trị trung bình các đặc trưng giữa nhóm đoán đúng và đoán sai."""
     outcome = frame[f"outcome_{model_key}"]
     rows = {}
     for group in ("TP", "FN", "TN", "FP"):
@@ -402,7 +346,7 @@ def segment_error_rates(
     column: str,
     min_count: int = 1,
 ) -> pd.DataFrame:
-    """Error, FP and FN rate per category of ``column`` (with train share)."""
+    """Phân tích tỷ lệ lỗi theo từng phân đoạn thuộc tính khách hàng."""
     freqs = frame.attrs.get("train_frequencies", {}).get(column)
     grouped = frame.groupby(column, observed=True)
     table = pd.DataFrame(
@@ -423,7 +367,7 @@ def segment_error_rates(
 
 
 def flag_error_rates(frame: pd.DataFrame, model_key: str) -> pd.DataFrame:
-    """Error rate with vs. without each data-quality / difficulty flag."""
+    """Đo lường tỷ lệ lỗi trên các nhóm mẫu mang cờ đặc biệt."""
     wrong = ~frame[f"correct_{model_key}"]
     flags = {
         "near_boundary (|p-0.5|<0.1)": frame[f"near_boundary_{model_key}"],
@@ -457,14 +401,7 @@ def flag_error_rates(frame: pd.DataFrame, model_key: str) -> pd.DataFrame:
 
 
 def post_hoc_duration_check(frame: pd.DataFrame, model_key: str) -> pd.DataFrame:
-    """Median call ``duration`` per outcome group.
-
-    ``duration`` is removed from training because it is only known after the
-    call.  It is used here purely as a diagnostic: if FN rows have long calls
-    (like TP) and FP rows have short calls (like TN), the errors are driven by
-    information that does not exist at prediction time (irreducible error for a
-    pre-call model) rather than by a model defect.
-    """
+    """Kiểm tra hậu nghiệm tương quan giữa thời lượng cuộc gọi và các trường hợp lỗi."""
     return (
         frame.groupby(f"outcome_{model_key}")["duration"]
         .describe(percentiles=[0.25, 0.5, 0.75])
@@ -476,7 +413,7 @@ def post_hoc_duration_check(frame: pd.DataFrame, model_key: str) -> pd.DataFrame
 # 4. Head-to-head comparison between model families
 # ---------------------------------------------------------------------------
 def mcnemar_exact(b: int, c: int) -> float:
-    """Two-sided exact McNemar p-value from discordant counts b and c."""
+    """Thực hiện kiểm định thống kê McNemar so sánh sự khác biệt giữa hai mô hình."""
     n = b + c
     if n == 0:
         return 1.0
@@ -486,7 +423,7 @@ def mcnemar_exact(b: int, c: int) -> float:
 
 
 def head_to_head(frame: pd.DataFrame, model_a: str, model_b: str) -> dict[str, Any]:
-    """Contingency of correctness between two models plus McNemar test."""
+    """Lập bảng đối đầu so sánh trực tiếp kết quả dự đoán giữa hai mô hình."""
     a = frame[f"correct_{model_a}"]
     b = frame[f"correct_{model_b}"]
     only_a = int((a & ~b).sum())
@@ -503,7 +440,7 @@ def head_to_head(frame: pd.DataFrame, model_a: str, model_b: str) -> dict[str, A
 
 
 def disagreement_cases(frame: pd.DataFrame, winner: str, loser: str) -> pd.DataFrame:
-    """Rows ``winner`` gets right and ``loser`` gets wrong (loser's most confident first)."""
+    """Trích xuất danh sách các mẫu mà hai mô hình đưa ra dự đoán trái ngược nhau."""
     mask = frame[f"correct_{winner}"] & ~frame[f"correct_{loser}"]
     cols = [
         *RAW_VIEW_COLUMNS,
@@ -518,7 +455,7 @@ def disagreement_cases(frame: pd.DataFrame, winner: str, loser: str) -> pd.DataF
 
 
 def disagreement_profile(frame: pd.DataFrame, model_a: str, model_b: str) -> pd.DataFrame:
-    """Compare raw attributes of 'only A correct' vs 'only B correct' vs 'both correct'."""
+    """Tạo hồ sơ phân tích đặc điểm các ca dự đoán bất đồng thuận giữa hai mô hình."""
     a = frame[f"correct_{model_a}"]
     b = frame[f"correct_{model_b}"]
     groups = {
@@ -558,7 +495,7 @@ def disagreement_profile(frame: pd.DataFrame, model_a: str, model_b: str) -> pd.
 # 5. Representative errors with technical diagnosis
 # ---------------------------------------------------------------------------
 def diagnose_error(row: pd.Series, model_key: str, frame: pd.DataFrame) -> str:
-    """Rule-based technical explanation (Vietnamese) for one wrong prediction."""
+    """Chẩn đoán nguyên nhân tiềm năng dẫn đến lỗi dự đoán cho từng mẫu cụ thể."""
     outcome = row[f"outcome_{model_key}"]
     prob = row[f"y_prob_{model_key}"]
     margin = row[f"margin_{model_key}"]
@@ -637,14 +574,7 @@ def select_representative_errors(
     compare_with: str = "linear",
     n_samples: int = 10,
 ) -> pd.DataFrame:
-    """Pick up to ``n_samples`` diverse, typical errors and diagnose each one.
-
-    Selection slots (first match not already chosen, deterministic order):
-    confident FN, confident FP, near-boundary FN, near-boundary FP,
-    FN with clipped balance, FP with poutcome=success, FN with contact=unknown,
-    error of ``model_key`` that ``compare_with`` gets right, the reverse case
-    (``compare_with`` wrong, ``model_key`` right), and a row all models miss.
-    """
+    """Lựa chọn các mẫu lỗi tiêu biểu đại diện cho các nhóm nhầm lẫn FP và FN."""
     outcome = frame[f"outcome_{model_key}"]
     margin = frame[f"margin_{model_key}"]
     wrong = ~frame[f"correct_{model_key}"]
@@ -721,7 +651,7 @@ def run_error_analysis(
     primary_model: str = "tree",
     compare_with: str = "linear",
 ) -> dict[str, pd.DataFrame]:
-    """Run every analysis step and export CSV tables to ``output_dir``."""
+    """Thực thi toàn bộ quy trình phân tích lỗi sai và xuất các báo cáo chuyên sâu."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

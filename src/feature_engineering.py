@@ -1,9 +1,4 @@
-"""Feature engineering and one feature-selection strategy for Week 2.
-
-The module is intentionally model-agnostic.  It adds exactly 24 features that
-are available before the current marketing call, then provides one selector:
-Mutual Information top-K selection for the fully encoded numeric matrix.
-"""
+"""Mô-đun kỹ nghệ đặc trưng và bộ lọc lựa chọn đặc trưng tối ưu qua Mutual Information."""
 
 from __future__ import annotations
 
@@ -15,9 +10,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.utils.validation import check_is_fitted
 
-
-TARGET_COLUMN = "deposit"
-RANDOM_STATE = 42
+from src.config import RANDOM_STATE, TARGET_COLUMN
 
 REQUIRED_SOURCE_COLUMNS = (
     "age",
@@ -48,7 +41,6 @@ MONTH_TO_NUMBER = {
     "dec": 12,
 }
 
-
 FEATURE_DEFINITIONS = (
     {
         "feature": "age_group",
@@ -69,14 +61,14 @@ FEATURE_DEFINITIONS = (
         "formula": "log1p(max(balance, 0))",
         "sources": "balance",
         "interpretation": "Quy mô số dư dương trên thang log.",
-        "rationale": "Week 1 ghi nhận balance lệch phải mạnh; log giảm ảnh hưởng đuôi dài.",
+        "rationale": "Số dư lệch phải mạnh; log giảm ảnh hưởng đuôi dài.",
     },
     {
         "feature": "balance_debt_log",
         "formula": "log1p(max(-balance, 0))",
         "sources": "balance",
         "interpretation": "Quy mô thấu chi/số dư âm trên thang log.",
-        "rationale": "Giữ riêng ý nghĩa nghiệp vụ của 688 số dư âm thay vì coi là lỗi.",
+        "rationale": "Giữ riêng ý nghĩa nghiệp vụ của số dư âm thay vì coi là lỗi.",
     },
     {
         "feature": "has_negative_balance",
@@ -132,7 +124,7 @@ FEATURE_DEFINITIONS = (
         "formula": "1(pdays >= 0 or previous > 0)",
         "sources": "pdays, previous",
         "interpretation": "Đã có lịch sử liên hệ trước chiến dịch hiện tại.",
-        "rationale": "Tách sentinel pdays=-1 khỏi số ngày thực, đúng kết luận Week 1.",
+        "rationale": "Tách giá trị chưa từng liên hệ pdays=-1 khỏi số ngày thực.",
     },
     {
         "feature": "prior_contact_recency_log",
@@ -153,7 +145,7 @@ FEATURE_DEFINITIONS = (
         "formula": "log1p(max(previous, 0))",
         "sources": "previous",
         "interpretation": "Số lần liên hệ ở chiến dịch trước trên thang log.",
-        "rationale": "Week 1 ghi nhận previous zero-inflated và lệch phải mạnh.",
+        "rationale": "Giảm độ lệch phải của số lần liên hệ trước đó.",
     },
     {
         "feature": "previous_contact_intensity",
@@ -167,7 +159,7 @@ FEATURE_DEFINITIONS = (
         "formula": "log1p(max(campaign, 0))",
         "sources": "campaign",
         "interpretation": "Số lần liên hệ trong chiến dịch hiện tại trên thang log.",
-        "rationale": "Campaign lệch phải mạnh trong Week 1; log giảm đuôi dài.",
+        "rationale": "Giảm ảnh hưởng đuôi dài của số lần liên hệ chiến dịch hiện tại.",
     },
     {
         "feature": "campaign_repeat_contact",
@@ -188,58 +180,51 @@ FEATURE_DEFINITIONS = (
         "formula": "1 / (pdays + 1) if poutcome == 'success' and pdays >= 0 else 0",
         "sources": "poutcome, pdays",
         "interpretation": "Độ gần đây có trọng số của một chiến dịch trước thành công.",
-        "rationale": "Kết hợp kết quả lịch sử với độ gần đây thay vì sao chép one-hot poutcome.",
+        "rationale": "Kết hợp kết quả lịch sử thành công với độ gần đây của tương tác.",
     },
     {
         "feature": "failed_prior_campaign_recontact",
         "formula": "1(poutcome == 'failure' and campaign > 1)",
         "sources": "poutcome, campaign",
         "interpretation": "Chiến dịch trước thất bại nhưng hiện tại đã liên hệ lặp lại.",
-        "rationale": "Biểu diễn tương tác giữa kết quả quá khứ và nỗ lực hiện tại.",
+        "rationale": "Biểu diễn tương tác giữa thất bại quá khứ và nỗ lực hiện tại.",
     },
     {
         "feature": "contact_known",
         "formula": "1(contact not in {'unknown', 'missing', null})",
         "sources": "contact",
         "interpretation": "Phương thức liên hệ đã được ghi nhận.",
-        "rationale": "Week 1 ghi nhận 21,02% contact là unknown và có chênh lệch target.",
+        "rationale": "Phân tách rõ khách hàng có thông tin liên lạc xác định.",
     },
     {
         "feature": "contact_month_sin",
         "formula": "sin(2*pi*(month_number-1)/12)",
         "sources": "month",
-        "interpretation": "Thành phần sin của chu kỳ tháng.",
-        "rationale": "Month có association lớn nhất trong nhóm category; mã hóa chu kỳ tránh đứt gãy Dec–Jan.",
+        "interpretation": "Thành phần sin của chu kỳ tháng trong năm.",
+        "rationale": "Mã hóa tuần hoàn tháng trong năm tránh đứt gãy giữa tháng 12 và tháng 1.",
     },
     {
         "feature": "contact_month_cos",
         "formula": "cos(2*pi*(month_number-1)/12)",
         "sources": "month",
-        "interpretation": "Thành phần cos của chu kỳ tháng.",
-        "rationale": "Kết hợp với thành phần sin để biểu diễn đầy đủ vị trí trong năm.",
+        "interpretation": "Thành phần cos của chu kỳ tháng trong năm.",
+        "rationale": "Kết hợp với sin tạo biểu diễn tọa độ vòng tròn hoàn chỉnh cho tháng.",
     },
 )
 
 ENGINEERED_FEATURES = tuple(item["feature"] for item in FEATURE_DEFINITIONS)
 
-if len(ENGINEERED_FEATURES) != 24 or len(set(ENGINEERED_FEATURES)) != 24:
-    raise RuntimeError("Feature engineering must define exactly 24 unique features.")
-
 
 def get_feature_documentation() -> pd.DataFrame:
-    """Return formulas, sources and Week-1 justification for all 24 features."""
-
+    """Trả về bảng dữ liệu định nghĩa công thức và ý nghĩa của 24 đặc trưng dẫn xuất."""
     return pd.DataFrame(FEATURE_DEFINITIONS).copy()
 
 
 class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
-    """Add 24 deterministic, pre-call features to a pandas DataFrame.
+    """Tạo 24 đặc trưng dẫn xuất trước cuộc gọi từ các trường thông tin thô."""
 
-    The target is rejected explicitly.  Leakage-prone ``duration`` is expected
-    to be removed by the integration schema guard before this transformer.
-    """
-
-    def fit(self, X: pd.DataFrame, y=None):
+    def fit(self, X: pd.DataFrame, y=None) -> BankMarketingFeatureEngineer:
+        """Ghi nhận danh sách đặc trưng đầu vào và xác thực không bị trùng tên đặc trưng mới."""
         X = self._validate_dataframe(X)
         self._validate_source_columns(X)
         self.feature_names_in_ = np.asarray(X.columns, dtype=object)
@@ -248,8 +233,7 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
         conflicts = sorted(set(ENGINEERED_FEATURES).intersection(X.columns))
         if conflicts:
             raise ValueError(
-                "Engineered feature names already exist in input: "
-                + ", ".join(conflicts)
+                "Tên đặc trưng kỹ nghệ đã tồn tại trong dữ liệu đầu vào: " + ", ".join(conflicts)
             )
 
         self.feature_names_out_ = np.asarray(
@@ -258,6 +242,7 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Tính toán và bổ sung đồng thời 24 đặc trưng mới vào DataFrame dữ liệu."""
         check_is_fitted(self, "feature_names_out_")
         X = self._validate_dataframe(X)
 
@@ -266,8 +251,7 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
         unexpected = sorted(set(X.columns).difference(fitted_columns))
         if missing or unexpected:
             raise ValueError(
-                "Input schema differs from fit schema. "
-                f"Missing={missing}; unexpected={unexpected}."
+                f"Lược đồ đầu vào khác với lúc fit. Thiếu={missing}; Thừa={unexpected}."
             )
 
         output = X.loc[:, fitted_columns].copy()
@@ -306,9 +290,7 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
             + personal_loan_yes.astype("int8")
             + default_yes.astype("int8")
         )
-        output["financial_stress_flag"] = (
-            default_yes | balance.lt(0)
-        ).astype("int8")
+        output["financial_stress_flag"] = (default_yes | balance.lt(0)).astype("int8")
         output["loan_with_negative_balance"] = (
             (housing_yes | personal_loan_yes) & balance.lt(0)
         ).astype("int8")
@@ -317,9 +299,7 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
         valid_pdays = pdays.where(pdays.ge(0), 0)
         output["prior_contacted"] = prior_contacted.astype("int8")
         output["prior_contact_recency_log"] = np.log1p(valid_pdays)
-        output["prior_contact_recent_30d"] = (
-            pdays.ge(0) & pdays.le(30)
-        ).astype("int8")
+        output["prior_contact_recent_30d"] = (pdays.ge(0) & pdays.le(30)).astype("int8")
         output["previous_contacts_log"] = np.log1p(previous.clip(lower=0))
         output["previous_contact_intensity"] = np.where(
             pdays.ge(0), previous.clip(lower=0) / (valid_pdays + 1), 0.0
@@ -327,8 +307,8 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
 
         output["campaign_contacts_log"] = np.log1p(campaign.clip(lower=0))
         output["campaign_repeat_contact"] = campaign.gt(1).astype("int8")
-        output["campaign_vs_previous_ratio"] = (
-            campaign.clip(lower=0) / (previous.clip(lower=0) + 1)
+        output["campaign_vs_previous_ratio"] = campaign.clip(lower=0) / (
+            previous.clip(lower=0) + 1
         )
 
         output["successful_prior_contact_recency"] = np.where(
@@ -338,8 +318,7 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
             poutcome.eq("failure") & campaign.gt(1)
         ).astype("int8")
         output["contact_known"] = (
-            contact.notna()
-            & ~contact.isin(["", "unknown", "missing", "<na>"])
+            contact.notna() & ~contact.isin(["", "unknown", "missing", "<na>"])
         ).astype("int8")
 
         month_number = month.map(MONTH_TO_NUMBER)
@@ -353,64 +332,54 @@ class BankMarketingFeatureEngineer(BaseEstimator, TransformerMixin):
         ]
         values = output[numeric_engineered].to_numpy(dtype=float)
         if not np.isfinite(values).all():
-            raise ValueError("Feature engineering introduced NaN or infinity.")
+            raise ValueError("Kỹ nghệ đặc trưng phát sinh giá trị NaN hoặc vô cùng.")
 
         return output.loc[:, self.feature_names_out_]
 
     def get_feature_names_out(self, input_features: Sequence[str] | None = None):
+        """Trả về danh sách đầy đủ tên các đặc trưng sau khi đã gắn thêm 24 biến dẫn xuất."""
         check_is_fitted(self, "feature_names_out_")
-        if input_features is not None and list(input_features) != list(
-            self.feature_names_in_
-        ):
-            raise ValueError("input_features do not match the fitted input schema.")
+        if input_features is not None and list(input_features) != list(self.feature_names_in_):
+            raise ValueError("input_features không khớp với lược đồ lúc fit.")
         return self.feature_names_out_.copy()
 
     @staticmethod
     def _validate_dataframe(X) -> pd.DataFrame:
+        """Kiểm tra tính hợp lệ của kiểu dữ liệu đầu vào và đảm bảo không chứa cột mục tiêu."""
         if not isinstance(X, pd.DataFrame):
-            raise TypeError(
-                "BankMarketingFeatureEngineer requires a pandas DataFrame input."
-            )
+            raise TypeError("BankMarketingFeatureEngineer yêu cầu dữ liệu dạng pandas DataFrame.")
         if TARGET_COLUMN in X.columns:
-            raise ValueError(
-                f"Target column '{TARGET_COLUMN}' must not enter feature engineering."
-            )
+            raise ValueError(f"Cột mục tiêu '{TARGET_COLUMN}' không được đi vào feature engineering.")
         return X
 
     @staticmethod
     def _validate_source_columns(X: pd.DataFrame) -> None:
+        """Xác thực DataFrame chứa đầy đủ danh sách các cột nguồn cần thiết cho kỹ nghệ đặc trưng."""
         missing = sorted(set(REQUIRED_SOURCE_COLUMNS).difference(X.columns))
         if missing:
             raise ValueError(
-                "Missing source columns required for feature engineering: "
-                + ", ".join(missing)
+                "Thiếu các cột nguồn cần thiết cho kỹ nghệ đặc trưng: " + ", ".join(missing)
             )
 
     @staticmethod
     def _numeric(X: pd.DataFrame, column: str) -> pd.Series:
+        """Chuyển đổi an toàn một cột về kiểu số thực float."""
         try:
             values = pd.to_numeric(X[column], errors="raise").astype(float)
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"Column '{column}' must be numeric.") from exc
+            raise ValueError(f"Cột '{column}' phải có kiểu số.") from exc
         if values.isna().any():
-            raise ValueError(
-                f"Column '{column}' still contains missing values before engineering."
-            )
+            raise ValueError(f"Cột '{column}' chứa giá trị thiếu chưa được xử lý.")
         return values
 
     @staticmethod
     def _text(values: pd.Series) -> pd.Series:
+        """Chuẩn hóa kiểu chuỗi ký tự bằng cách loại bỏ khoảng trắng và chuyển chữ thường."""
         return values.astype("string").str.strip().str.lower()
 
 
 class MutualInformationSelector(BaseEstimator, TransformerMixin):
-    """Select exactly top-K encoded features by training-only mutual information.
-
-    This is the sole feature-selection strategy used in Week 2.  MI is suited
-    to a binary target and can capture non-linear associations after mixed
-    numerical/categorical features have been encoded.  ``random_state`` makes
-    sklearn's continuous-variable estimation deterministic.
-    """
+    """Lựa chọn K đặc trưng quan trọng nhất dựa trên điểm tương hỗ Mutual Information."""
 
     def __init__(
         self,
@@ -423,42 +392,42 @@ class MutualInformationSelector(BaseEstimator, TransformerMixin):
             "engineered_binary__",
         ),
     ):
+        """Khởi tạo số lượng đặc trưng K cần giữ lại và tham số tính toán Mutual Information."""
         self.k = k
         self.random_state = random_state
         self.discrete_prefixes = discrete_prefixes
 
-    def fit(self, X, y=None):
+    def fit(self, X, y=None) -> MutualInformationSelector:
+        """Tính toán điểm Mutual Information trên tập huấn luyện và lưu chỉ số K cột cao nhất."""
         if y is None:
-            raise ValueError("MutualInformationSelector.fit requires y_train.")
+            raise ValueError("MutualInformationSelector.fit yêu cầu nhãn y_train.")
 
         frame, was_dataframe = self._as_frame(X)
         if TARGET_COLUMN in frame.columns:
-            raise ValueError(f"Target column '{TARGET_COLUMN}' is present in X.")
+            raise ValueError(f"Cột mục tiêu '{TARGET_COLUMN}' xuất hiện trong ma trận đặc trưng X.")
         if len(frame) != len(y):
-            raise ValueError("X and y have different row counts.")
+            raise ValueError("Số dòng của X và y không khớp nhau.")
 
         values = frame.to_numpy(dtype=float)
         if not np.isfinite(values).all():
-            raise ValueError("Mutual information input contains NaN or infinity.")
+            raise ValueError("Ma trận đầu vào tính Mutual Information chứa NaN hoặc vô cùng.")
 
         n_features = frame.shape[1]
         if self.k == "all":
             k = n_features
         elif isinstance(self.k, int) and not isinstance(self.k, bool):
             if not 1 <= self.k <= n_features:
-                raise ValueError(
-                    f"k must be between 1 and {n_features}; received {self.k}."
-                )
+                raise ValueError(f"k phải nằm trong khoảng 1 và {n_features}; nhận được {self.k}.")
             k = self.k
         else:
-            raise ValueError("k must be a positive integer or 'all'.")
+            raise ValueError("k phải là số nguyên dương hoặc 'all'.")
 
         target = pd.Series(y).reset_index(drop=True)
         if target.isna().any():
-            raise ValueError("y_train contains missing labels.")
+            raise ValueError("y chứa nhãn bị khuyết thiếu.")
         target_codes, classes = pd.factorize(target, sort=True)
         if len(classes) < 2:
-            raise ValueError("Mutual information requires at least two target classes.")
+            raise ValueError("Mutual Information yêu cầu tối thiểu 2 lớp mục tiêu.")
 
         feature_names = np.asarray(frame.columns.astype(str), dtype=object)
         discrete_mask = np.asarray(
@@ -475,7 +444,7 @@ class MutualInformationSelector(BaseEstimator, TransformerMixin):
             random_state=self.random_state,
         )
         if not np.isfinite(scores).all():
-            raise ValueError("Mutual information produced a non-finite score.")
+            raise ValueError("Mutual Information tính toán ra điểm số không hữu hạn.")
 
         ranking = np.lexsort((np.arange(n_features), -scores))
         selected_indices = np.sort(ranking[:k])
@@ -494,6 +463,7 @@ class MutualInformationSelector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        """Trích xuất và trả về ma trận dữ liệu chỉ chứa K đặc trưng đã chọn lọc."""
         check_is_fitted(self, "selected_indices_")
         frame, was_dataframe = self._as_frame(X)
 
@@ -503,14 +473,13 @@ class MutualInformationSelector(BaseEstimator, TransformerMixin):
             missing = sorted(set(fitted_names).difference(current_names))
             unexpected = sorted(set(current_names).difference(fitted_names))
             raise ValueError(
-                "Encoded schema differs from fit schema. "
-                f"Missing={missing}; unexpected={unexpected}."
+                f"Lược đồ đầu vào khác với lúc fit. Thiếu={missing}; Thừa={unexpected}."
             )
         frame = frame.loc[:, fitted_names]
 
         values = frame.to_numpy(dtype=float)
         if not np.isfinite(values).all():
-            raise ValueError("Selector transform input contains NaN or infinity.")
+            raise ValueError("Dữ liệu đầu vào transform chứa NaN hoặc vô cùng.")
 
         selected = frame.iloc[:, self.selected_indices_]
         if was_dataframe:
@@ -518,6 +487,7 @@ class MutualInformationSelector(BaseEstimator, TransformerMixin):
         return selected.to_numpy()
 
     def get_support(self, indices: bool = False):
+        """Trả về mảng boolean hoặc mảng chỉ số đại diện cho các đặc trưng được chọn."""
         check_is_fitted(self, "selected_indices_")
         if indices:
             return self.selected_indices_.copy()
@@ -526,16 +496,14 @@ class MutualInformationSelector(BaseEstimator, TransformerMixin):
         return mask
 
     def get_feature_names_out(self, input_features: Sequence[str] | None = None):
+        """Trả về mảng tên các đặc trưng được chọn lọc bởi Mutual Information."""
         check_is_fitted(self, "selected_feature_names_")
-        if input_features is not None and list(input_features) != list(
-            self.feature_names_in_
-        ):
-            raise ValueError("input_features do not match the fitted encoded schema.")
+        if input_features is not None and list(input_features) != list(self.feature_names_in_):
+            raise ValueError("input_features không khớp với lược đồ lúc fit.")
         return self.selected_feature_names_.copy()
 
     def get_selection_summary(self) -> pd.DataFrame:
-        """Return all MI scores and selection flags, highest score first."""
-
+        """Tạo bảng DataFrame chi tiết điểm số Mutual Information sắp xếp giảm dần."""
         check_is_fitted(self, "scores_")
         selected = set(self.selected_feature_names_)
         return (
@@ -557,11 +525,12 @@ class MutualInformationSelector(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def _as_frame(X) -> tuple[pd.DataFrame, bool]:
+        """Chuyển đổi cấu trúc mảng đầu vào thành đối tượng DataFrame kèm cờ định dạng."""
         if isinstance(X, pd.DataFrame):
             return X.copy(), True
         values = np.asarray(X)
         if values.ndim != 2:
-            raise ValueError("Selector input must be a two-dimensional matrix.")
+            raise ValueError("Dữ liệu đầu vào selector phải là ma trận 2 chiều.")
         columns = [f"x{i}" for i in range(values.shape[1])]
         return pd.DataFrame(values, columns=columns), False
 

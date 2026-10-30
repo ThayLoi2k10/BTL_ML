@@ -1,13 +1,7 @@
-"""Streamlit Web Application for Bank Marketing Deposit Prediction.
-
-Author: Lợi (Person 1 - Deploy & Inference)
-Usage:
-    streamlit run app.py
-"""
+"""Ứng dụng web Streamlit hỗ trợ dự đoán khách hàng đăng ký tiền gửi ngân hàng."""
 
 from __future__ import annotations
 
-import os
 import sys
 import warnings
 from pathlib import Path
@@ -18,20 +12,25 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from src.config import (
+    CHAMPION_MODEL_PATH,
+    PREPROCESSING_PIPELINE_PATH,
+    PROJECT_ROOT,
+    SAMPLE_TEST_PATH,
+)
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# Ensure project root is in sys.path
-PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-DEFAULT_PIPELINE_PATH = PROJECT_ROOT / "models" / "preprocessing_pipeline.pkl"
-DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "champion_model.pkl"
-DEFAULT_SAMPLE_PATH = PROJECT_ROOT / "data" / "sample_test.csv"
+DEFAULT_PIPELINE_PATH = PREPROCESSING_PIPELINE_PATH
+DEFAULT_MODEL_PATH = CHAMPION_MODEL_PATH
+DEFAULT_SAMPLE_PATH = SAMPLE_TEST_PATH
 
 
 def ensure_unpickle_compatibility() -> None:
-    """Ensure compatibility across scikit-learn versions during unpickling."""
+    """Đảm bảo tính tương thích khi nạp các đối tượng Transformer qua joblib."""
     import sklearn.compose._column_transformer as ct
 
     if not hasattr(ct, "_RemainderColsList"):
@@ -43,7 +42,7 @@ def ensure_unpickle_compatibility() -> None:
 
 @st.cache_resource(show_spinner="Đang nạp mô hình và pipeline tiền xử lý...")
 def load_artifacts() -> tuple[Any, Any]:
-    """Load fitted preprocessing pipeline and champion model once."""
+    """Nạp và lưu trữ bộ nhớ đệm đối tượng pipeline tiền xử lý và mô hình champion."""
     ensure_unpickle_compatibility()
     if not DEFAULT_PIPELINE_PATH.exists():
         raise FileNotFoundError(f"Không tìm thấy pipeline tại {DEFAULT_PIPELINE_PATH}")
@@ -56,7 +55,7 @@ def load_artifacts() -> tuple[Any, Any]:
 
 
 def predict_dataframe(df_input: pd.DataFrame, pipeline: Any, model: Any) -> pd.DataFrame:
-    """Run preprocessing and inference on a DataFrame."""
+    """Thực thi tiền xử lý đặc trưng và suy luận nhãn kèm xác suất trên một DataFrame."""
     df_raw = df_input.copy()
     actual_labels = None
     if "deposit" in df_raw.columns:
@@ -89,6 +88,7 @@ def predict_dataframe(df_input: pd.DataFrame, pipeline: Any, model: Any) -> pd.D
 
 
 def main() -> None:
+    """Khởi tạo và điều khiển giao diện web Streamlit cho dự đoán đơn lẻ và theo lô."""
     st.set_page_config(
         page_title="Dự Đoán Gửi Tiết Kiệm Ngân Hàng",
         page_icon="🏦",
@@ -111,7 +111,6 @@ def main() -> None:
 
     tab1, tab2 = st.tabs(["📋 Dự đoán Khách hàng Đơn lẻ", "📁 Dự đoán Theo lô (Batch CSV)"])
 
-    # ---------------- TAB 1: SINGLE PREDICTION ----------------
     with tab1:
         st.subheader("Nhập thông tin khách hàng")
         with st.form("single_customer_form"):
@@ -201,7 +200,6 @@ def main() -> None:
             else:
                 st.warning("💡 **Khuyến nghị nghiệp vụ:** Xác suất tham gia thấp. Cân nhắc tiếp cận qua kênh tiếp thị số chi phí thấp (Email/SMS) thay vì tốn chi phí gọi telesale trực tiếp.")
 
-    # ---------------- TAB 2: BATCH PREDICTION ----------------
     with tab2:
         st.subheader("Tải lên file CSV chứa danh sách khách hàng")
         st.markdown(

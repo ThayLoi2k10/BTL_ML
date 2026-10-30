@@ -1,18 +1,4 @@
-"""Reproducible system benchmarking and trade-off integration for Week 4.
-
-This module belongs to Nhân (Person 4).  It evaluates the three immutable
-Week-3 model artifacts on the already preprocessed Week-2 test matrix.  It
-never calls ``fit`` and never applies the preprocessing pipeline a second
-time.
-
-Run from the repository root with::
-
-    python -m src.evaluation.benchmark
-
-The command writes Nhân-owned JSON evidence and copies (byte-for-byte) the
-provisionally recommended Week-3 artifact to ``models/champion_model.pkl``.
-The recommendation remains subject to team confirmation.
-"""
+"""Module đánh giá hiệu năng hệ thống và tổng hợp ma trận đánh đổi (trade-off)."""
 
 from __future__ import annotations
 
@@ -29,16 +15,17 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Any
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import joblib
 import numpy as np
 import pandas as pd
 import sklearn
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROCESSED_DATA_DIR = PROJECT_ROOT / "data" / "processed"
-MODELS_DIR = PROJECT_ROOT / "models"
-REPORTS_DIR = PROJECT_ROOT / "reports"
+from src.config import MODELS_DIR, PROCESSED_DATA_DIR, PROJECT_ROOT, REPORTS_DIR
 
 MODEL_SPECS = {
     "linear": {
@@ -73,7 +60,7 @@ MODEL_SPECS = {
 
 @dataclass(frozen=True)
 class BenchmarkConfig:
-    """Timing protocol for deterministic input selection and repeated runs."""
+    """Lớp cấu hình các tham số đánh giá chuẩn benchmark hiệu năng hệ thống."""
 
     single_sample_index: int = 0
     single_warmup_runs: int = 25
@@ -101,7 +88,7 @@ class BenchmarkConfig:
 
 
 def sha256_file(path: str | Path) -> str:
-    """Return the SHA-256 digest of a file without modifying it."""
+    """Tính mã băm SHA-256 xác thực tính toàn vẹn của tệp tin."""
 
     digest = hashlib.sha256()
     with Path(path).open("rb") as handle:
@@ -113,7 +100,7 @@ def sha256_file(path: str | Path) -> str:
 def load_preprocessed_test_features(
     path: str | Path = PROCESSED_DATA_DIR / "X_test.parquet",
 ) -> pd.DataFrame:
-    """Load and validate the immutable, already preprocessed test features."""
+    """Nạp ma trận đặc trưng và nhãn kiểm thử đã qua tiền xử lý."""
 
     path = Path(path)
     if not path.exists():
@@ -139,7 +126,7 @@ def load_preprocessed_test_features(
 
 
 def load_saved_models() -> dict[str, Any]:
-    """Load the three Week-3 estimators without fitting or changing them."""
+    """Nạp các mô hình đã lưu từ tệp nhị phân phục vụ đo lường benchmark."""
 
     models: dict[str, Any] = {}
     for family, spec in MODEL_SPECS.items():
@@ -154,7 +141,7 @@ def load_saved_models() -> dict[str, Any]:
 
 
 def verify_model_contract(model: Any, X_test: pd.DataFrame) -> dict[str, Any]:
-    """Verify that an estimator consumes the processed schema exactly once."""
+    """Kiểm tra tính hợp lệ của hợp đồng giao diện scikit-learn trên mô hình."""
 
     expected_count = getattr(model, "n_features_in_", None)
     if expected_count is None:
@@ -197,7 +184,7 @@ def verify_model_contract(model: Any, X_test: pd.DataFrame) -> dict[str, Any]:
 
 
 def _distribution(values: list[float]) -> dict[str, float]:
-    """Summarize repeated timings without hiding run-to-run variation."""
+    """Tính toán các chỉ số thống kê phân bố thời gian thực thi."""
 
     array = np.asarray(values, dtype=float)
     return {
@@ -215,13 +202,7 @@ def benchmark_estimator(
     X_test: pd.DataFrame,
     config: BenchmarkConfig,
 ) -> dict[str, Any]:
-    """Measure single-row latency and full-test batch throughput.
-
-    Timing uses ``perf_counter_ns``.  Predict calls are warmed up, inputs are
-    fixed, and garbage collection is paused only while the measured loops run.
-    The loaded estimator's saved execution settings (including ``n_jobs``) are
-    preserved.
-    """
+    """Đo lường độ trễ suy luận, thông lượng và dung lượng bộ nhớ của mô hình."""
 
     if config.single_sample_index >= len(X_test):
         raise IndexError(
@@ -285,7 +266,7 @@ def benchmark_estimator(
 
 
 def recover_recorded_week3_times() -> dict[str, dict[str, Any]]:
-    """Recover only timing values actually persisted by Week-3 work."""
+    """Khôi phục thời gian tìm kiếm siêu tham số đã ghi nhận từ trước."""
 
     recovered: dict[str, dict[str, Any]] = {
         family: {
@@ -332,7 +313,7 @@ def recover_recorded_week3_times() -> dict[str, dict[str, Any]]:
 
 
 def environment_conditions() -> dict[str, Any]:
-    """Record the software and hardware context needed to interpret timings."""
+    """Thu thập thông tin cấu hình phần cứng và môi trường hệ thống thực thi."""
 
     return {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -362,7 +343,7 @@ def run_system_benchmarks(
     config: BenchmarkConfig | None = None,
     output_json: str | Path | None = REPORTS_DIR / "week4_system_benchmark.json",
 ) -> dict[str, Any]:
-    """Benchmark all immutable Week-3 artifacts on processed ``X_test``."""
+    """Thực thi đo kiểm benchmark tài nguyên hệ thống cho tất cả các mô hình."""
 
     config = config or BenchmarkConfig()
     config.validate()
@@ -394,7 +375,7 @@ def run_system_benchmarks(
 
     payload = {
         "schema_version": 1,
-        "scope": "Week 4 Nhân system benchmark; prediction only; no fitting",
+        "scope": "System benchmark; prediction only; no fitting",
         "environment": environment_conditions(),
         "methodology": {
             "timer": "time.perf_counter_ns",
@@ -426,12 +407,12 @@ def build_tradeoff_matrix(
     evaluation_csv: str | Path = REPORTS_DIR / "evaluation_benchmark.csv",
     output_json: str | Path | None = REPORTS_DIR / "week4_tradeoff_matrix.json",
 ) -> list[dict[str, Any]]:
-    """Join Lợi's held-out metrics with Nhân's operational measurements."""
+    """Xây dựng ma trận đánh đổi đa chiều giữa độ chính xác, độ trễ và khả năng giải thích."""
 
     evaluation_csv = Path(evaluation_csv)
     if not evaluation_csv.exists():
         raise FileNotFoundError(
-            "Person 1 evaluation summary is required for the trade-off matrix: "
+            "Evaluation summary is required for the trade-off matrix: "
             f"{evaluation_csv}"
         )
     evaluation = pd.read_csv(evaluation_csv).set_index("Model_Key")
@@ -489,7 +470,7 @@ def build_tradeoff_matrix(
 def recommend_provisional_champion(
     tradeoff_matrix: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Recommend, but do not team-confirm, a model for batch campaign scoring."""
+    """Xác định và đề xuất mô hình vô địch Champion dựa trên thang điểm tổng hợp."""
 
     if not tradeoff_matrix:
         raise ValueError("tradeoff_matrix must contain at least one model.")
@@ -541,9 +522,8 @@ def recommend_provisional_champion(
             "artifact and medium interpretability remain material trade-offs."
         ),
         "limitations": [
-            "No documented team approval was found; this is not a confirmed team decision.",
+            "Decision subject to team confirmation.",
             "The application has no documented latency, memory, or throughput SLA.",
-            "Person 2's Week-4 plots module/output was not available on the inspected main branch.",
         ],
     }
 
@@ -552,7 +532,7 @@ def copy_provisional_champion(
     recommendation: dict[str, Any],
     output_path: str | Path = MODELS_DIR / "champion_model.pkl",
 ) -> dict[str, Any]:
-    """Copy the selected artifact byte-for-byte, preserving all originals."""
+    """Sao chép tệp mô hình vô địch được chọn vào đường dẫn champion_model.pkl."""
 
     family = recommendation.get("selected_family")
     if family not in MODEL_SPECS:
@@ -580,7 +560,7 @@ def copy_provisional_champion(
 def run_week4_nhan(
     config: BenchmarkConfig | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-    """Run Nhân's complete benchmark, comparison, and provisional selection."""
+    """Thực thi toàn bộ quy trình đo lường benchmark và chốt mô hình vô địch."""
 
     benchmark_payload = run_system_benchmarks(config=config)
     tradeoff_matrix = build_tradeoff_matrix(benchmark_payload)
@@ -595,7 +575,7 @@ def run_week4_nhan(
 
 
 def main() -> None:
-    """Execute the default reproducible benchmark protocol."""
+    """Điểm vào chính điều khiển thực thi kịch bản đo kiểm benchmark."""
 
     benchmark_payload, tradeoff_matrix, recommendation = run_week4_nhan()
     print("Week-4 system benchmark completed without fitting any model.")

@@ -1,73 +1,51 @@
+"""Mô-đun tiền xử lý làm sạch dữ liệu thô và cắt tỉa giá trị ngoại lai."""
+
+from __future__ import annotations
+
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-
-CATEGORICAL_COLUMNS = [
-    "job",
-    "marital",
-    "education",
-    "default",
-    "housing",
-    "loan",
-    "contact",
-    "month",
-    "poutcome",
-]
-
-NUMERICAL_COLUMNS = [
-    "age",
-    "balance",
-    "day",
-    "duration",
-    "campaign",
-    "pdays",
-    "previous",
-]
+from src.config import CATEGORICAL_COLUMNS, NUMERICAL_COLUMNS
 
 
 class StringCleaner(BaseEstimator, TransformerMixin):
-    """Chuẩn hóa các cột categorical."""
+    """Chuẩn hóa định dạng chuỗi và đồng nhất các nhãn phân loại."""
 
-    def __init__(self, columns=None):
+    def __init__(self, columns: list[str] | None = None):
+        """Khởi tạo danh sách các cột phân loại cần chuẩn hóa chuỗi."""
         self.columns = columns if columns is not None else CATEGORICAL_COLUMNS
 
-    def fit(self, X, y=None):
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> StringCleaner:
+        """Ghi nhận trạng thái cấu hình của bộ chuẩn hóa chuỗi."""
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Thực hiện xóa khoảng trắng thừa, chuyển chữ thường và chuẩn hóa nhãn nghề nghiệp."""
         X = X.copy()
-
         for col in self.columns:
-            X[col] = (
-                X[col].astype("string").str.strip().str.lower()
-            )
+            if col in X.columns:
+                X[col] = X[col].astype("string").str.strip().str.lower()
 
-        # Chuẩn hóa nhãn bị phát hiện trong EDA
-        if "job" in self.columns:
+        if "job" in self.columns and "job" in X.columns:
             X["job"] = X["job"].replace("admin.", "admin")
 
         return X
 
 
 class MissingHandler(BaseEstimator, TransformerMixin):
-    """
-    Xử lý missing values.
-
-    - categorical: 'unknown' / NaN -> 'missing'
-    - numerical: điền mean hoặc median theo strategy
-    - pdays = -1 được giữ nguyên
-    """
+    """Xử lý giá trị khuyết thiếu cho cả biến phân loại và biến số."""
 
     def __init__(
         self,
-        numeric_strategy=None,
-        categorical_missing_value="missing",
+        numeric_strategy: dict[str, str] | None = None,
+        categorical_missing_value: str = "missing",
     ):
+        """Khởi tạo chiến lược điền giá trị thiếu cho biến số và biến phân loại."""
         self.numeric_strategy = numeric_strategy
         self.categorical_missing_value = categorical_missing_value
 
-    def fit(self, X, y=None):
-        # Strategy mặc định dựa trên EDA
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> MissingHandler:
+        """Tính toán giá trị thống kê (mean hoặc median) trên tập huấn luyện cho từng biến số."""
         if self.numeric_strategy is None:
             self.numeric_strategy_ = {
                 "age": "median",
@@ -81,63 +59,54 @@ class MissingHandler(BaseEstimator, TransformerMixin):
         else:
             self.numeric_strategy_ = self.numeric_strategy
 
-        # Học giá trị thay thế từ tập train
         self.fill_values_ = {}
-
         for col in NUMERICAL_COLUMNS:
-            # Pipeline tích hợp có thể loại cột leakage (ví dụ duration)
-            # trước bước cleaning. Các cột còn lại vẫn dùng nguyên logic gốc.
             if col not in X.columns:
                 continue
 
             series = X[col]
-
-            # pdays = -1 là sentinel, không dùng để tính statistic
             if col == "pdays":
                 series = series[series >= 0]
 
-            if self.numeric_strategy_[col] == "mean":
-                self.fill_values_[col] = series.mean()
-            elif self.numeric_strategy_[col] == "median":
-                self.fill_values_[col] = series.median()
+            if self.numeric_strategy_.get(col) == "mean":
+                self.fill_values_[col] = float(series.mean())
+            elif self.numeric_strategy_.get(col) == "median":
+                self.fill_values_[col] = float(series.median())
             else:
-                raise ValueError(
-                    f"Strategy không hợp lệ cho '{col}': "
-                    f"{self.numeric_strategy_[col]}"
-                )
+                raise ValueError(f"Chiến lược không hợp lệ cho cột '{col}'.")
 
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Thay thế giá trị 'unknown'/NaN bằng nhãn thiếu hoặc giá trị thống kê đã học."""
         X = X.copy()
 
-        # Categorical: unknown / NaN -> missing
         for col in CATEGORICAL_COLUMNS:
-            X[col] = (
-                X[col]
-                .astype("string")
-                .replace("unknown", self.categorical_missing_value)
-                .fillna(self.categorical_missing_value)
-            )
+            if col in X.columns:
+                X[col] = (
+                    X[col]
+                    .astype("string")
+                    .replace("unknown", self.categorical_missing_value)
+                    .fillna(self.categorical_missing_value)
+                )
 
-        # Numerical: NaN -> statistic đã học từ train
         for col in NUMERICAL_COLUMNS:
-            if col not in X.columns:
-                continue
-            X[col] = X[col].fillna(self.fill_values_[col])
+            if col in X.columns and col in self.fill_values_:
+                X[col] = X[col].fillna(self.fill_values_[col])
 
         return X
 
 
 class OutlierClipper(BaseEstimator, TransformerMixin):
-    """Cắt tỉa outlier bằng ngưỡng 1.5 × IQR."""
+    """Cắt tỉa các giá trị ngoại lai của biến số dựa trên khoảng tứ phân vị IQR."""
 
-    def __init__(self, factor=1.5):
+    def __init__(self, factor: float = 1.5):
+        """Khởi tạo hệ số nhân khoảng IQR để xác định biên ngoại lai."""
         self.factor = factor
 
-    def fit(self, X, y=None):
-        # Các biến cần clipping
-        self.clip_columns_ = [
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> OutlierClipper:
+        """Tính toán ngưỡng cận trên và cận dưới theo IQR trên tập huấn luyện."""
+        candidate_columns = [
             "age",
             "balance",
             "duration",
@@ -145,69 +114,40 @@ class OutlierClipper(BaseEstimator, TransformerMixin):
             "previous",
             "pdays",
         ]
-        self.clip_columns_ = [
-            col for col in self.clip_columns_ if col in X.columns
-        ]
-
-        # Các biến không được phép âm
-        self.non_negative_columns_ = [
-            "duration",
-            "campaign",
-            "previous",
-            "pdays",
-        ]
-
+        self.clip_columns_ = [col for col in candidate_columns if col in X.columns]
+        self.non_negative_columns_ = ["duration", "campaign", "previous", "pdays"]
         self.bounds_ = {}
 
         for col in self.clip_columns_:
             series = X[col]
-
-            # pdays = -1 là sentinel, không tham gia tính IQR
             if col == "pdays":
                 series = series[series >= 0]
 
-            q1 = series.quantile(0.25)
-            q3 = series.quantile(0.75)
+            q1 = float(series.quantile(0.25))
+            q3 = float(series.quantile(0.75))
             iqr = q3 - q1
 
             lower = q1 - self.factor * iqr
             upper = q3 + self.factor * iqr
 
-            # Các biến này không thể có giá trị âm
             if col in self.non_negative_columns_:
-                lower = max(0, lower)
+                lower = max(0.0, lower)
 
             self.bounds_[col] = (lower, upper)
 
         return self
 
-    def transform(self, X):
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Giới hạn các giá trị của biến số nằm trong khoảng biên đã tính toán."""
         X = X.copy()
-
         for col, (lower, upper) in self.bounds_.items():
+            if col not in X.columns:
+                continue
 
             if col == "pdays":
-                # Chỉ clip giá trị pdays >= 0.
-                # pdays = -1 được giữ nguyên.
                 mask = X["pdays"] >= 0
-                X.loc[mask, "pdays"] = (
-                    X.loc[mask, "pdays"]
-                    .clip(lower=lower, upper=upper)
-                )
-
+                X.loc[mask, "pdays"] = X.loc[mask, "pdays"].clip(lower=lower, upper=upper)
             else:
-                X[col] = X[col].clip(lower=lower, upper=upper,)
+                X[col] = X[col].clip(lower=lower, upper=upper)
 
         return X
-
-
-
-# Ghép các bước cleaning thành một chuỗi xử lý thống nhất
-# để có thể fit/transform dữ liệu theo chuẩn Scikit-Learn.
-""" from sklearn.pipeline import Pipeline
-
-cleaning_pipeline = Pipeline([
-    ("string", StringCleaner()),
-    ("missing", MissingHandler()),
-    ("outlier", OutlierClipper()),
-]) """

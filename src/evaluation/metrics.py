@@ -1,23 +1,18 @@
-"""Quantitative evaluation and generalization gap comparison for Week 4.
-
-Author: Lợi (Person 1 - Evaluation & Metrics)
-Responsibilities:
-1. Load preprocessing pipeline and evaluation test data (leakage-free).
-2. Load all saved models from Week 3 (Linear, Tree, Nonlinear) + Dummy baseline.
-3. Generate predictions (y_pred) and probabilities (y_prob) into a shared DataFrame
-   to hand over to Person 2 (plots.py) and Person 3 (error_analysis.py).
-4. Compute comprehensive classification (Accuracy, Precision, Recall, Macro-F1,
-   ROC-AUC, PR-AUC) and regression metrics (RMSE, MAE, R2, MAPE).
-5. Build 2-way comparison table: CV Score (Week 3) <-> Test Score (Week 4)
-   and determine Generalization Gap / Overfitting risk.
-"""
+"""Mô-đun đo lường định lượng và so sánh năng lực tổng quát hóa giữa các mô hình."""
 
 from __future__ import annotations
 
 import json
-import os
+import sys
 from pathlib import Path
 from typing import Any
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 import joblib
 import numpy as np
@@ -36,21 +31,27 @@ from sklearn.metrics import (
     root_mean_squared_error,
 )
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROCESSED_DATA_DIR = PROJECT_ROOT / "data" / "processed"
-MODELS_DIR = PROJECT_ROOT / "models"
-REPORTS_DIR = PROJECT_ROOT / "reports"
+from src.config import (
+    BEST_HYPERPARAMETERS_PATH,
+    DATA_PROCESSED_DIR,
+    MODELS_DIR,
+    PREPROCESSING_PIPELINE_PATH,
+    REPORTS_DIR,
+)
+
+PREDICTIONS_PARQUET_PATH = REPORTS_DIR / "test_predictions.parquet"
+PREDICTIONS_CSV_PATH = REPORTS_DIR / "test_predictions.csv"
+BENCHMARK_SUMMARY_PATH = REPORTS_DIR / "evaluation_benchmark.csv"
 
 
 def load_preprocessing_pipeline(
-    pipeline_path: str | Path = MODELS_DIR / "preprocessing_pipeline.pkl",
+    pipeline_path: str | Path = PREPROCESSING_PIPELINE_PATH,
 ) -> Any:
-    """Load the fitted preprocessing pipeline with unpickling compatibility guards."""
+    """Nạp đường ống tiền xử lý đã huấn luyện kèm bộ đệm tương thích unpickle."""
     pipeline_path = Path(pipeline_path)
     if not pipeline_path.exists():
-        raise FileNotFoundError(f"Preprocessing pipeline not found at {pipeline_path}")
+        raise FileNotFoundError(f"Không tìm thấy pipeline tiền xử lý tại: {pipeline_path}")
 
-    # Compatibility shim for scikit-learn version differences
     import sklearn.compose._column_transformer as ct
 
     if not hasattr(ct, "_RemainderColsList"):
@@ -63,16 +64,11 @@ def load_preprocessing_pipeline(
 
 
 def load_test_data(
-    processed_dir: str | Path = PROCESSED_DATA_DIR,
+    processed_dir: str | Path = DATA_PROCESSED_DIR,
     raw_csv_path: str | Path | None = None,
     pipeline: Any | None = None,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """Load test features and ground-truth labels.
-
-    If data/processed/X_test.parquet exists, it loads pre-transformed features
-    directly (already processed by Week 2 pipeline).
-    If a raw CSV is provided, it transforms raw data using the fitted pipeline.
-    """
+    """Nạp ma trận đặc trưng và nhãn thực tế của tập kiểm thử độc lập."""
     processed_dir = Path(processed_dir)
     test_x_path = processed_dir / "X_test.parquet"
     test_y_path = processed_dir / "y_test.parquet"
@@ -93,22 +89,15 @@ def load_test_data(
             X_test = pd.DataFrame(X_test)
         return X_test, y_test
 
-    raise FileNotFoundError(
-        f"Could not find processed test data in {processed_dir} and no raw CSV provided."
-    )
+    raise FileNotFoundError(f"Không tìm thấy tập dữ liệu kiểm thử tại: {processed_dir}")
 
 
 def load_all_models(
     models_dir: str | Path = MODELS_DIR,
-    train_x_path: str | Path = PROCESSED_DATA_DIR / "X_train.parquet",
-    train_y_path: str | Path = PROCESSED_DATA_DIR / "y_train.parquet",
+    train_x_path: str | Path = DATA_PROCESSED_DIR / "X_train.parquet",
+    train_y_path: str | Path = DATA_PROCESSED_DIR / "y_train.parquet",
 ) -> dict[str, Any]:
-    """Load all saved models from Week 3 and instantiate the Dummy baseline.
-
-    Returns
-    -------
-    dict with keys: 'dummy', 'linear', 'tree', 'nonlinear'
-    """
+    """Nạp tất cả các mô hình đã lưu cùng mô hình cơ sở Dummy Classifier."""
     models_dir = Path(models_dir)
     linear_path = models_dir / "best_linear_model.pkl"
     tree_path = models_dir / "best_tree_model.pkl"
@@ -116,13 +105,12 @@ def load_all_models(
 
     for p in (linear_path, tree_path, nonlinear_path):
         if not p.exists():
-            raise FileNotFoundError(f"Model file not found: {p}")
+            raise FileNotFoundError(f"Không tìm thấy file mô hình: {p}")
 
     linear_model = joblib.load(linear_path)
     tree_model = joblib.load(tree_path)
     nonlinear_model = joblib.load(nonlinear_path)
 
-    # Fit DummyClassifier baseline on X_train, y_train
     dummy_model = DummyClassifier(strategy="most_frequent")
     if Path(train_x_path).exists() and Path(train_y_path).exists():
         X_train = pd.read_parquet(train_x_path)
@@ -142,11 +130,7 @@ def predict_model_outputs(
     X_test: pd.DataFrame,
     pos_label: str = "yes",
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate predictions and positive class probabilities for an estimator.
-
-    For SVC without predict_proba, uses the logistic sigmoid of decision_function:
-    P(y=1|x) = 1 / (1 + exp(-decision_function(x))).
-    """
+    """Thực thi dự đoán nhãn lớp và xác suất tương ứng cho một mô hình ước lượng."""
     y_pred = model.predict(X_test)
 
     if hasattr(model, "predict_proba"):
@@ -162,10 +146,8 @@ def predict_model_outputs(
             y_prob = probs[:, 1] if probs.shape[1] > 1 else probs[:, 0]
     elif hasattr(model, "decision_function"):
         decision = model.decision_function(X_test)
-        # Platt/logistic sigmoid mapping: monotonic, maps R -> (0, 1)
         y_prob = 1.0 / (1.0 + np.exp(-decision))
     else:
-        # Fallback to binary predicted values as pseudo-probability
         y_prob = (pd.Series(y_pred) == pos_label).astype(float).to_numpy()
 
     return np.asarray(y_pred), np.asarray(y_prob)
@@ -176,17 +158,10 @@ def generate_predictions_dataframe(
     X_test: pd.DataFrame,
     y_test: pd.Series,
     pos_label: str = "yes",
-    output_parquet: str | Path | None = REPORTS_DIR / "test_predictions.parquet",
-    output_csv: str | Path | None = REPORTS_DIR / "test_predictions.csv",
+    output_parquet: str | Path | None = PREDICTIONS_PARQUET_PATH,
+    output_csv: str | Path | None = PREDICTIONS_CSV_PATH,
 ) -> pd.DataFrame:
-    """Generate and save unified predictions DataFrame for Person 2 and Person 3.
-
-    Columns include:
-    - y_true: actual string label ('no', 'yes')
-    - y_true_binary: actual binary integer (0, 1)
-    - y_pred_<model>: predicted label
-    - y_prob_<model>: positive class probability
-    """
+    """Tạo và lưu trữ DataFrame hợp nhất chứa nhãn thực tế, dự đoán và xác suất của tất cả mô hình."""
     y_test_clean = y_test.reset_index(drop=True)
     df_pred = pd.DataFrame({
         "y_true": y_test_clean,
@@ -215,7 +190,7 @@ def compute_classification_metrics(
     y_prob: pd.Series | np.ndarray | None = None,
     pos_label: str = "yes",
 ) -> dict[str, float]:
-    """Compute all required quantitative classification metrics on the test set."""
+    """Tính toán toàn bộ các chỉ số định lượng phân loại trên tập kiểm thử."""
     y_true_series = pd.Series(y_true).reset_index(drop=True)
     y_pred_series = pd.Series(y_pred).reset_index(drop=True)
 
@@ -256,7 +231,7 @@ def compute_regression_metrics(
     y_true: pd.Series | np.ndarray,
     y_pred: pd.Series | np.ndarray,
 ) -> dict[str, float]:
-    """Compute regression metrics (RMSE, MAE, R2, MAPE) for full specification compliance."""
+    """Tính toán các chỉ số hồi quy (RMSE, MAE, R2, MAPE) phục vụ bài toán liên tục."""
     y_true_arr = np.asarray(y_true, dtype=float)
     y_pred_arr = np.asarray(y_pred, dtype=float)
 
@@ -274,9 +249,9 @@ def compute_regression_metrics(
 
 
 def load_week3_cv_scores(
-    hyperparameters_json: str | Path = MODELS_DIR / "best_hyperparameters.json",
+    hyperparameters_json: str | Path = BEST_HYPERPARAMETERS_PATH,
 ) -> dict[str, float]:
-    """Load CV scores recorded during Week 3 model tuning."""
+    """Nạp điểm kiểm định chéo F1-Macro đã ghi nhận trong quá trình tuning ở Tuần 3."""
     json_path = Path(hyperparameters_json)
     if json_path.exists():
         with open(json_path, "r", encoding="utf-8") as f:
@@ -298,14 +273,9 @@ def load_week3_cv_scores(
 def build_evaluation_summary(
     df_predictions: pd.DataFrame,
     cv_scores: dict[str, float] | None = None,
-    output_csv: str | Path | None = REPORTS_DIR / "evaluation_benchmark.csv",
+    output_csv: str | Path | None = BENCHMARK_SUMMARY_PATH,
 ) -> pd.DataFrame:
-    """Build the 2-way comparison table: CV Score (Week 3) <-> Test Score (Week 4).
-
-    Calculates:
-    - Generalization Gap = CV_Score - Test_Macro_F1
-    - Overfitting Risk classification
-    """
+    """Lập bảng đối chiếu hai chiều giữa điểm CV Tuần 3 và điểm Test Tuần 4 để tính Generalization Gap."""
     if cv_scores is None:
         cv_scores = load_week3_cv_scores()
 
@@ -339,13 +309,13 @@ def build_evaluation_summary(
         if np.isnan(cv_score):
             risk = "N/A"
         elif gen_gap > 0.05:
-            risk = "High Overfitting Risk"
+            risk = "Nguy cơ Overfitting cao"
         elif gen_gap > 0.02:
-            risk = "Moderate Overfitting Risk"
+            risk = "Nguy cơ Overfitting vừa phải"
         elif gen_gap < -0.02:
-            risk = "Underfitting on Train / Strong Generalization"
+            risk = "Khái quát hóa mạnh / Điểm Test cao hơn Train"
         else:
-            risk = "Minimal Gap / Well Generalized"
+            risk = "Chênh lệch tối thiểu / Khái quát hóa xuất sắc"
 
         records.append({
             "Model_Key": key,
@@ -364,7 +334,6 @@ def build_evaluation_summary(
         })
 
     summary_df = pd.DataFrame(records)
-
     if output_csv is not None:
         Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
         summary_df.to_csv(output_csv, index=False)
@@ -373,27 +342,28 @@ def build_evaluation_summary(
 
 
 def evaluate_all_models() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Execute end-to-end evaluation pipeline and export all artifacts."""
-    print("Loading test data...")
+    """Thực thi toàn bộ quy trình đánh giá định lượng đầu cuối và xuất các bảng kết quả."""
+    print("Nạp dữ liệu kiểm thử...")
     X_test, y_test = load_test_data()
 
-    print("Loading Week 3 models...")
+    print("Nạp các mô hình đã huấn luyện...")
     models = load_all_models()
 
-    print("Generating predictions and probability outputs for Person 2 & Person 3...")
+    print("Sinh dự đoán và phân bố xác suất cho tất cả các mô hình...")
     df_pred = generate_predictions_dataframe(models, X_test, y_test)
-    print(f"Predictions saved to {REPORTS_DIR / 'test_predictions.parquet'} and .csv")
+    print(f"Đã lưu kết quả dự đoán tại: {PREDICTIONS_CSV_PATH}")
 
-    print("Computing 2-way evaluation summary and generalization gaps...")
+    print("Xây dựng bảng đối chiếu hai chiều CV vs Test...")
     summary_df = build_evaluation_summary(df_pred)
-    print(f"Summary saved to {REPORTS_DIR / 'evaluation_benchmark.csv'}")
+    print(f"Đã lưu bảng tổng hợp đánh giá tại: {BENCHMARK_SUMMARY_PATH}")
 
     return df_pred, summary_df
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Hàm thực thi chính khi chạy module từ dòng lệnh."""
     preds, summary = evaluate_all_models()
-    print("\n--- QUANTITATIVE EVALUATION BENCHMARK: CV (WEEK 3) VS TEST (WEEK 4) ---")
+    print("\n--- BẢNG ĐỐI CHIẾU ĐỊNH LƯỢNG CV (TUẦN 3) VS TEST (TUẦN 4) ---")
     print(summary[[
         "Model_Name",
         "CV_Macro_F1 (W3)",
@@ -404,3 +374,7 @@ if __name__ == "__main__":
         "Test_PR_AUC",
         "Overfitting_Risk",
     ]].to_string(index=False))
+
+
+if __name__ == "__main__":
+    main()
