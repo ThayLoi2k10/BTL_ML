@@ -1,6 +1,6 @@
 # Mục 4.3 — Trực quan hóa Chẩn đoán Hiệu năng & Đánh giá Đa mô hình
 
-> **Tài liệu nộp cho Person 4:** Bản thảo Mục 4.3 do **Person 2 (Diagnostic Visualization & Performance Curves)** biên soạn.  
+> **Tài liệu nộp cho Person 4:** Bản thảo Mục 4.3 do **Ngô Minh Trí (Person 2 - MSSV: 2313598, Diagnostic Visualization & Performance Curves)** biên soạn.  
 > **Dữ liệu thực nghiệm:** Bảng dự đoán hợp nhất của Person 1 `reports/test_predictions.parquet` / `.csv` (2.233 mẫu Test độc lập, 1.175 *no* / 1.058 *yes*).  
 > **Mã nguồn thực thi:** `src/evaluation/plots.py` (chạy tự động qua lệnh `python -m src.evaluation.plots`).  
 > **Bộ file ảnh chẩn đoán bàn giao (300 DPI & Vector SVG):**  

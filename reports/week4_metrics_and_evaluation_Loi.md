@@ -1,6 +1,6 @@
 # Mục 4 — Đánh giá Mô hình & So sánh Năng lực Tổng quát hóa
 
-> **Tài liệu nộp cho Person 4:** Bản thảo Mục 4.1 và Mục 4.2 do **Lợi (Person 1 - Metrics & Quantitative Evaluation)** biên soạn.  
+> **Tài liệu nộp cho Person 4:** Bản thảo Mục 4.1 và Mục 4.2 do **Phan Ngọc Xuân Lợi (Person 1 - MSSV: 2411969, Metrics & Quantitative Evaluation)** biên soạn.  
 > **Dữ liệu thực nghiệm:** Tập kiểm thử độc lập `data/processed/X_test.parquet` và `y_test.parquet` (2.233 mẫu, 32 đặc trưng, 1.175 *no* / 1.058 *yes*).  
 > **Mã nguồn thực thi:** `src/evaluation/metrics.py`.  
 > **Artifact bàn giao:**  
@@ -96,3 +96,44 @@ $$
 - **Ứng viên Champion số 1:** **Random Forest (Tuned)** là mô hình chiến thắng toàn diện trên tập Test ở cả chỉ số mục tiêu cốt lõi (Macro-$F_1 = 0.7263$), khả năng xếp hạng phân loại (ROC-AUC = $0.7747$, PR-AUC = $0.7774$) và khả năng phát hiện khách hàng tiềm năng (Recall = $62.85\%$).
 - **Khả năng triển khai bổ trợ:** Trong trường hợp ngân hàng có ngân sách cuộc gọi giới hạn và ưu tiên tỷ lệ chuyển đổi cao nhất cho mỗi cuộc gọi tiếp cận, **SVC RBF** là phương án thay thế khả thi nhờ Precision dẫn đầu ($78.35\%$).
 - Toàn bộ dữ liệu dự đoán `y_pred` và xác suất `y_prob` của 4 mô hình đã được xuất sang `reports/test_predictions.parquet` để Person 2 vẽ đồ thị (Confusion Matrices, ROC, PR Curves) và Person 3 thực hiện Error Analysis.
+
+---
+
+## 4.3. Trực quan hóa Chẩn đoán Hiệu năng & Đánh giá Đa mô hình
+
+> **Người thực hiện:** Person 2 — Diagnostic Visualization & Performance Curves  
+> **Mã nguồn:** `src/evaluation/plots.py`  
+> **Tài liệu chi tiết & Biểu đồ vector:** `reports/week4_diagnostic_plots_Person2.md`  
+
+### 4.3.1. Ma trận Nhầm lẫn Đối chiếu Trực diện (Figure 06)
+Ma trận nhầm lẫn 4 mô hình (Dummy, Logistic Regression, Random Forest, SVC RBF) được thiết kế song song 2 phiên bản: số lượng tuyệt đối (Raw counts) và tỷ lệ chuẩn hóa theo hàng (Row-normalized Recall / Specificity):
+
+![Figure 06: Ma trận nhầm lẫn đối chiếu trực diện](../figures/06_confusion_matrices.png)
+
+- **Dummy Baseline:** Dự đoán 100% `no`, đạt Specificity 100% nhưng triệt tiêu Recall về 0% ($FN = 1.058$).
+- **Random Forest (Tuned):** Đạt tổng số lỗi ít nhất ($600$ lỗi, 26.87%), phân phối cân bằng nhất: Specificity = $82.4\%$ ($TN = 968$), Sensitivity/Recall = $62.9\%$ ($TP = 665$).
+- **SVC RBF (Tuned):** Thiên hướng thận trọng cao độ, đạt Specificity cao nhất ($85.4\%$, $FP = 171$), nhưng số ca bỏ sót tăng lên ($FN = 439$, Recall = $58.5\%$).
+
+### 4.3.2. Đường cong ROC & Khả năng Phân tách Nhãn (Figure 07)
+Biểu đồ ROC đối chiếu năng lực phân tách tổng quát qua mọi ngưỡng cắt:
+
+![Figure 07: Đường cong ROC đa mô hình](../figures/07_roc_curves.png)
+
+- **Diện tích dưới đường cong:** $\text{AUC}_{\text{Random Forest}} (0.7747) \approx \text{AUC}_{\text{SVC}} (0.7729) > \text{AUC}_{\text{Logistic}} (0.7605) \gg \text{AUC}_{\text{Dummy}} (0.5000)$.
+- **Độ dốc ban đầu ở vùng $FPR < 0.15$:** Rất dốc, cho phép khai thác $30\% - 45\%$ khách hàng tiềm năng với tỷ lệ gọi nhầm dưới $6\%$.
+- **Điểm vận hành $\tau = 0.50$:** Điểm hoạt động của Random Forest nằm ngay tại tọa độ vai gập tối ưu Youden's Index ($J = 0.4554$).
+
+### 4.3.3. Đường cong Precision-Recall cho Lớp Mục tiêu (Figure 08)
+Đường cong PR tập trung vào chất lượng nhận diện khách hàng thực sự có nhu cầu gửi tiền (`yes`):
+
+![Figure 08: Đường cong Precision-Recall đa mô hình](../figures/08_pr_curves.png)
+
+- **Average Precision:** Random Forest đạt $\text{AP} = \mathbf{0.7774}$, vượt trội so với No-Skill baseline ($\text{Prevalence} = 0.4738$).
+- **Độ bền vững:** Random Forest duy trì Precision trên $75\%$ ngay cả khi Recall mở rộng đến $60\% - 65\%$.
+
+### 4.3.4. Nhận xét Ngưỡng cắt Phân loại & Khuyến nghị Triển khai
+- **Ngưỡng mặc định $\tau = 0.50$:** Đã tối ưu tự nhiên cho Random Forest (gần sát ngưỡng Youden $J^*$ tại $\tau = 0.5211$).
+- **Kịch bản ngân sách giới hạn:** Giữ $\tau = 0.50$ trên SVC RBF để đạt Precision cực đại $78.35\%$.
+- **Kịch bản mở rộng thị phần:** Hạ ngưỡng $\tau = 0.41$ trên Random Forest để đẩy Recall lên $71.93\%$ trong khi Precision vẫn an toàn ở mức $68.37\%$.
+- **Chỉ định Champion Model:** **Random Forest (Tuned)** chiến thắng toàn diện trên cả 3 góc độ đồ thị chẩn đoán.
+

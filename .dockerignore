@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C environments
+.Python
+env/
+venv/
+.venv/
+.clean_test_env/
+
+# IDE / Editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Testing and caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Gemini / Antigravity metadata
+.gemini/
+

@@ -1,6 +1,7 @@
 # Kịch bản Thuyết trình & Bộ câu hỏi Phản biện
 
-> **Phụ trách:** Danh (Person 3, Tuần 5)
+> **Phụ trách:** Đỗ Phúc Danh (Person 3, Tuần 5)
+> **Thành viên nhóm:** Phan Ngọc Xuân Lợi (2411969), Đỗ Phúc Danh (2310409), Phan Kỳ Nhân (2412432), Ngô Minh Trí (2313598)
 > **File trình chiếu:** `docs/Slides.pptx` (14 slide) và bản xuất `docs/Slides.pdf`.
 > **Tổng thời lượng mục tiêu:** **11 phút 15 giây** (khung quy định 10–12 phút).
 > Lời nói chi tiết cho từng slide nằm trong **Speaker Notes** của file PowerPoint (View → Notes). Tài liệu này là bản tóm tắt để cả nhóm tập dượt.
@@ -168,7 +169,7 @@ Thêm về vận hành: RF mất khoảng 54 ms cho một mẫu và nặng 41.5 
 
 ## 6. Checklist trước buổi bảo vệ
 
-- [ ] Điền họ tên đầy đủ và MSSV của 4 thành viên lên slide 1 (hiện chỉ ghi tên gọi).
+- [x] Điền họ tên đầy đủ và MSSV của 4 thành viên: Phan Ngọc Xuân Lợi (2411969), Đỗ Phúc Danh (2310409), Phan Kỳ Nhân (2412432), Ngô Minh Trí (2313598).
 - [ ] Cả nhóm xác nhận Champion là Random Forest (file của Nhân đang ghi trạng thái *provisional*).
 - [ ] Đối chiếu số liệu slide với `docs/Report.pdf` của Nhân, phải khớp 100%.
 - [ ] Tập dượt bấm giờ ít nhất 2 lần; tổng thời gian trong khoảng 10:30–11:45.

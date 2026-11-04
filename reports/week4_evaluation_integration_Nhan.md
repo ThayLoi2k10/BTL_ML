@@ -1,6 +1,6 @@
 # Đóng góp Tuần 4 - Đánh giá và lựa chọn mô hình của Nhân
 
-Tài liệu này tích hợp các kết quả Tuần 4 hiện có và bổ sung phần benchmark hệ thống, ma trận đánh đổi, giới hạn thực tế và khuyến nghị champion của Nhân. Các mô hình và pipeline từ Tuần 1-3 được giữ nguyên. Toàn bộ phép đo tốc độ dùng các artifact đã huấn luyện và `data/processed/X_test.parquet`; không có bước `fit` hoặc tiền xử lý lại.
+Tài liệu này tích hợp các kết quả Tuần 4 hiện có và bổ sung phần benchmark hệ thống, ma trận đánh đổi, giới hạn thực tế và khuyến nghị champion của Phan Kỳ Nhân (Person 4 - MSSV: 2412432). Các mô hình và pipeline từ Tuần 1-3 được giữ nguyên. Toàn bộ phép đo tốc độ dùng các artifact đã huấn luyện và `data/processed/X_test.parquet`; không có bước `fit` hoặc tiền xử lý lại.
 
 ## 4. Đánh giá mô hình
 

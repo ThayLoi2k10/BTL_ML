@@ -1,6 +1,6 @@
 # Mục 5.2 — Phân tích Lỗi Dự đoán & Điểm mù Mô hình (Error Analysis)
 
-> **Tài liệu nộp cho Person 4:** Bản thảo Mục 5.2 do **Danh (Person 3 - Error Analysis)** biên soạn.
+> **Tài liệu nộp cho Person 4:** Bản thảo Mục 5.2 do **Đỗ Phúc Danh (Person 3 - MSSV: 2310409, Error Analysis)** biên soạn.
 > **Đầu vào:** Bảng dự đoán hợp nhất của Person 1 `reports/test_predictions.parquet` (2.233 mẫu Test, 3 mô hình + Dummy) và dữ liệu thô `data/raw/bank.csv`.
 > **Mã nguồn:** `src/evaluation/error_analysis.py` — chạy lại toàn bộ bằng `python -m src.evaluation.error_analysis`.
 > **Artifact bàn giao:** thư mục `reports/error_analysis/` (18 bảng CSV), trong đó quan trọng nhất:
