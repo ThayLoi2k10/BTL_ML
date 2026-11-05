@@ -46,7 +46,7 @@
 | **FN — bỏ sót khách** / **FP — gọi nhầm** | "sai loại 1/2" | Để hội đồng nghe là hiểu ngay |
 | **Generalization gap** = CV − Test | "chênh lệch" | Âm nghĩa là điểm Test ≥ điểm CV |
 | **Chồng lấn lớp** | "dữ liệu xấu" | Các mẫu giống nhau về đặc trưng nhưng khác nhãn |
-| **Champion** | "mô hình tốt nhất" | Mô hình được chọn để triển khai (Random Forest Tuned) |
+| **Champion đề xuất** | "mô hình được cả nhóm phê duyệt" | Random Forest Tuned, chờ xác nhận nhóm |
 | **Ngưỡng τ** | "threshold" lẫn lộn | Mặc định 0.5; có thể đổi theo nghiệp vụ |
 
 **Quy ước số liệu:** dấu chấm thập phân, dấu phẩy phân cách hàng nghìn (0.7263; 11,162), giống biểu đồ của nhóm. Khi nói thì đọc làm tròn: "không phẩy bảy hai sáu", "sáu mươi ba phần trăm".
@@ -67,7 +67,7 @@
 | RF ở τ ≈ 0.41 | Recall 71.9% · Precision 68.4% | `test_predictions.parquet` |
 | McNemar | RF vs LR p = 0.041 · RF vs SVC p = 0.54 | `error_analysis/head_to_head.csv` |
 | Lỗi RF | 600 lỗi; 65% là FN; 72% chung cả 3 mô hình; 84% trong vùng chồng lấn | `error_analysis/` |
-| Benchmark RF | 53.7 ms/mẫu · 24.1 nghìn mẫu/s · 41.5 MB | `week4_tradeoff_matrix.json` |
+| Benchmark RF | 28.38 ms/mẫu · 44.36 nghìn mẫu/s · 41.5 MB | `week4_tradeoff_matrix.json`, bản ghi 03/11/2026 |
 
 ---
 
@@ -96,9 +96,9 @@
 5. **Có kiểm chứng:** biến đổi lại X_test thô bằng pipeline đã lưu cho kết quả trùng khớp `X_test.parquet`. Phần phân tích lỗi cũng kiểm tra từng dòng nhãn khớp với dữ liệu thô.
 
 **Câu hỏi bẫy có thể gặp — "Khi chạy CV ở Tuần 3, pipeline có được fit lại trong từng fold không?"**
-Trả lời trung thực: **không**. Pipeline được fit một lần trên toàn bộ X_train, sau đó CV chạy trên dữ liệu đã biến đổi. Vì vậy trong CV có một lượng **rò rỉ nhỏ giữa các fold**: scaler và bộ chọn Mutual Information đã "nhìn" cả fold validation. Hệ quả là điểm CV có thể hơi lạc quan. Tuy nhiên:
-- Tập **Test hoàn toàn sạch**, vì pipeline không bao giờ thấy nó.
-- Điểm Test **không thấp hơn** điểm CV (gap từ −0.014 đến −0.003), nên trên thực tế lượng rò rỉ này không làm sai kết luận.
+Trả lời trung thực: **không**. Pipeline được fit một lần trên toàn bộ X_train, sau đó CV chạy trên dữ liệu đã biến đổi. Scaler và bộ chọn Mutual Information đã dùng cả fold validation. Điểm CV có thể lạc quan; **độ lớn tác động chưa được đo**.
+- Test không tham gia fit/tuning, nhưng đã được dùng so sánh model và phân tích lỗi ở Tuần 4.
+- Gap CV–Test nhỏ **không** chứng minh tác động của fold leakage là nhỏ hoặc không có overfitting. RF vẫn có gap train–validation khoảng 0.164 trên learning curve.
 - Hướng sửa: đưa cả pipeline vào bên trong `GridSearchCV` (Pipeline gồm preprocessing và model) để mỗi fold tự fit lại. Đây là cải tiến đã ghi nhận.
 
 ---
@@ -107,14 +107,14 @@ Trả lời trung thực: **không**. Pipeline được fit một lần trên to
 
 **Trả lời ngắn:**
 - **Chỉ số chính:** Test Macro-F1 cao nhất 0.7263. RF cũng cao nhất về Recall (62.9%), ROC-AUC (0.7747), PR-AUC (0.7774) và Youden J = TPR − FPR (0.4554).
-- **Ổn định:** gap CV − Test = −0.003, nên không có dấu hiệu overfit lên Test.
+- **Gap mô tả:** CV − Test = −0.003; không dùng gap này như kiểm định không overfit.
 - **Kiểm định McNemar.** Kiểm định này chỉ xét những mẫu mà hai mô hình bất đồng, và tính xác suất (theo phân phối nhị thức, giả thuyết H₀ là hai mô hình tốt như nhau) để thấy chênh lệch ít nhất như vậy:
   - RF vs Logistic: 174 mẫu chỉ RF đúng, 137 mẫu chỉ LR đúng → **p = 0.041 < 0.05**. RF tốt hơn có ý nghĩa thống kê.
   - RF vs SVC: 113 so với 103 → **p = 0.54**. Không khác biệt có ý nghĩa.
-- Vì RF và SVC hòa về mặt thống kê, nhóm dùng **tiêu chí phụ theo nghiệp vụ**: Recall cao hơn 4.3 điểm % (bắt thêm khoảng 46 khách `yes` trên tập Test) và chấm điểm theo lô nhanh hơn khoảng 10 lần.
-- **Đánh đổi chấp nhận:** file 41.5 MB, 54 ms cho một mẫu, khả năng giải thích ở mức trung bình. Các điểm này chấp nhận được vì mô hình được dùng để chấm điểm danh sách gọi theo lô.
+- Không bác bỏ khác biệt RF–SVC không đồng nghĩa hai model tương đương. Nhân đề xuất RF với Recall cao hơn 4.3 điểm % (46 khách yes) và batch nhanh hơn khoảng 14 lần trong bản ghi hiện tại; chờ xác nhận nhóm.
+- **Đánh đổi:** file 41.5 MB, 28.38 ms cho một mẫu, giải thích trung bình. Chưa có SLA để xác nhận đáp ứng sản xuất.
 
-**Nếu bị hỏi — "Chênh lệch 0.008 Macro-F1 giữa RF và SVC có đáng kể không?"** Không đáng kể về thống kê (p = 0.54). Nhóm nói rõ điều này và không khẳng định RF "vượt trội" SVC. Lựa chọn dựa trên Recall và chi phí vận hành.
+**Nếu bị hỏi — "Chênh lệch 0.008 Macro-F1 giữa RF và SVC có đáng kể không?"** McNemar p = 0.54 kiểm tra lỗi ghép cặp, không trực tiếp kiểm định Macro-F1. Chưa có phép kiểm định riêng cho chênh lệch Macro-F1; không kết luận hai model tương đương. P-value cũng chưa hiệu chỉnh nhiều phép so sánh.
 
 ---
 
@@ -122,10 +122,10 @@ Trả lời trung thực: **không**. Pipeline được fit một lần trên to
 
 **Trả lời ngắn:**
 - **Lỗi chủ yếu là FN (65%)**, tức là bỏ sót khách sẽ đăng ký.
-- **Phần lớn là lỗi không thể khử** với dữ liệu trước cuộc gọi. Ba bằng chứng:
+- **Có dấu hiệu giới hạn thông tin**, nhưng chưa chứng minh lỗi không thể khử. Ba quan sát:
   1. 72% lỗi của RF cũng là lỗi của cả Logistic và SVC. Ba họ thuật toán khác nhau mà sai cùng chỗ.
   2. 84% lỗi nằm ở vùng chồng lấn lớp: đa số 15 khách giống nhất trong tập Train có nhãn ngược với nhãn thật.
-  3. Hậu kiểm bằng `duration` (không dùng để huấn luyện): khách FN có cuộc gọi dài 732 giây, gấp đôi nhóm TP (314 giây). Những khách này có hồ sơ "lạnh" nhưng được thuyết phục **trong** cuộc gọi, điều mà mô hình trước cuộc gọi không thể biết.
+  3. Hậu kiểm bằng `duration` (không dùng để huấn luyện): median của FN là 732 giây, TP là 314 giây. Association này không chứng minh cuộc gọi dài gây đăng ký hoặc khách được thuyết phục trong cuộc gọi.
 - **Hai điểm mù có thể cải thiện:**
   - Khách chưa từng được liên hệ: Recall chỉ 50%, so với 86% ở khách đã từng liên hệ.
   - Khách có `contact = unknown`: RF chỉ bắt được 15/107 khách `yes`, Logistic chỉ bắt được 2/107. Khi điền khuyết, giá trị này thành mức `missing` và mô hình học nó như tín hiệu "không".
@@ -146,11 +146,11 @@ Trả lời trung thực: **không**. Pipeline được fit một lần trên to
 | **Data drift** | Hành vi khách, lãi suất, mùa vụ thay đổi; dữ liệu Test cùng nguồn với Train nên chưa phản ánh được tương lai | Theo dõi phân bố đặc trưng và tỉ lệ `yes` thực tế; huấn luyện lại định kỳ |
 | **Xác suất chưa hiệu chỉnh** | P(yes) của RF/SVC chưa được calibration. Riêng SVC dùng sigmoid trên `decision_function` | Calibration (Platt/Isotonic) nếu dùng xác suất để ra quyết định theo chi phí |
 | **Điểm mù dữ liệu** | Khách chưa từng liên hệ và khách `contact=unknown` bị bỏ sót nhiều | Cảnh báo riêng cho hai nhóm này; bổ sung đặc trưng |
-| **Phiên bản thư viện** | `preprocessing_pipeline.pkl` được lưu bằng scikit-learn 1.6.1, nạp bằng 1.9.1 sinh cảnh báo `InconsistentVersionWarning` | Khóa phiên bản trong `requirements.txt` (phần của Trí), kiểm thử môi trường sạch |
+| **Phiên bản thư viện** | Artifact đã được cập nhật ở Tuần 5; bản nộp được kiểm thử lại với sklearn 1.9.1 | Dùng phiên bản khóa; không thay model hoặc preprocessing riêng lẻ |
 | **Vòng phản hồi (feedback loop)** | Mô hình chỉ học được từ khách đã được gọi. Nếu chỉ gọi khách điểm cao thì nhãn tương lai bị lệch | Giữ một phần nhỏ danh sách gọi ngẫu nhiên để thu nhãn không thiên lệch |
 | **Công bằng & giải thích** | Có đặc trưng tuổi (`age_group_60_plus`); RF khó giải thích từng quyết định | Rà soát theo nhóm tuổi; dùng feature importance hoặc SHAP khi cần giải trình |
 
-Thêm về vận hành: RF mất khoảng 54 ms cho một mẫu và nặng 41.5 MB. Mức này ổn khi chấm điểm theo lô, nhưng nếu cần API thời gian thực tải cao thì nên benchmark lại trên hạ tầng thật.
+Thêm về vận hành: RF median 28.38 ms cho một mẫu và 41.5 MB, theo bản ghi Intel 20 CPU logic, Python 3.12.3 ngày 03/11/2026. Chỉ đo model.predict, không tính preprocessing, I/O hoặc mạng. Cần benchmark hạ tầng thật trước khi chốt SLA.
 
 ---
 
