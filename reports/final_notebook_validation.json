@@ -1,0 +1,52 @@
+[
+  {
+    "notebook": "00_EDA_Final.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 19.145
+  },
+  {
+    "notebook": "01_data_quality.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 10.51
+  },
+  {
+    "notebook": "02_distributions.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 8.495
+  },
+  {
+    "notebook": "03_relationships.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 5.477
+  },
+  {
+    "notebook": "04_features_pipeline.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 5.271
+  },
+  {
+    "notebook": "05_model_experiments.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 346.334
+  },
+  {
+    "notebook": "06_evaluation.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 6.491,
+    "revision": "baseline"
+  },
+  {
+    "notebook": "06_evaluation.ipynb",
+    "python": "E:\\Downloads\\BTL_ML_acceptance_20261105\\venv\\Scripts\\python.exe",
+    "status": "passed",
+    "elapsed_seconds": 8.294,
+    "revision": "corrected final integration"
+  }
+]
