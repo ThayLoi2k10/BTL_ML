@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+# The orchestration CLI exports figures to files and must work without a GUI.
+os.environ.setdefault("MPLBACKEND", "Agg")
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")

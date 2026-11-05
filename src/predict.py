@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import argparse
 import sys
-import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -24,8 +23,6 @@ from src.config import (
     PREPROCESSING_PIPELINE_PATH,
     SAMPLE_TEST_PATH,
 )
-
-warnings.filterwarnings("ignore", category=UserWarning)
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -88,27 +85,36 @@ def predict(
     if hasattr(model, "predict_proba"):
         probabilities = model.predict_proba(X_transformed)
         classes = list(getattr(model, "classes_", ["no", "yes"]))
-        pos_idx = classes.index(pos_label) if pos_label in classes else 1
+        if len(classes) != 2 or pos_label not in classes:
+            raise ValueError("Prediction requires two classes including the positive label.")
+        pos_idx = classes.index(pos_label)
         neg_idx = 1 - pos_idx
 
         prob_pos = probabilities[:, pos_idx]
         prob_neg = probabilities[:, neg_idx]
         confidence = np.max(probabilities, axis=1)
+        score_kind = "uncalibrated_predict_proba"
     elif hasattr(model, "decision_function"):
         decisions = model.decision_function(X_transformed)
-        prob_pos = 1.0 / (1.0 + np.exp(-decisions))
-        prob_neg = 1.0 - prob_pos
-        confidence = np.maximum(prob_pos, prob_neg)
+        # A margin is not a probability. Preserve it without a sigmoid label.
+        prob_pos = np.full(len(predictions), np.nan)
+        prob_neg = np.full(len(predictions), np.nan)
+        confidence = np.full(len(predictions), np.nan)
+        score_kind = "decision_function_not_probability"
     else:
-        prob_pos = (pd.Series(predictions) == pos_label).astype(float).to_numpy()
-        prob_neg = 1.0 - prob_pos
-        confidence = np.ones(len(predictions), dtype=float)
+        prob_pos = np.full(len(predictions), np.nan)
+        prob_neg = np.full(len(predictions), np.nan)
+        confidence = np.full(len(predictions), np.nan)
+        score_kind = "label_only"
 
     result_df = df_raw.copy()
     result_df["predicted_deposit"] = predictions
     result_df["confidence_score"] = np.round(confidence, 4)
     result_df["probability_yes"] = np.round(prob_pos, 4)
     result_df["probability_no"] = np.round(prob_neg, 4)
+    result_df["score_kind"] = score_kind
+    if score_kind == "decision_function_not_probability":
+        result_df["decision_score"] = decisions
 
     if actual_labels is not None:
         result_df["actual_deposit"] = actual_labels
@@ -212,7 +218,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     counts = results_df["predicted_deposit"].value_counts().to_dict()
     print(f"[*] Thống kê kết quả : {counts}")
     mean_conf = results_df["confidence_score"].mean()
-    print(f"[*] Độ tin cậy TB     : {mean_conf:.2%}")
+    if pd.notna(mean_conf):
+        print(f"[*] Điểm predict_proba TB (chưa calibration): {mean_conf:.2%}")
+    else:
+        print("[*] Mô hình không cung cấp xác suất; xem score_kind/decision_score.")
     print("=" * 70)
 
 
